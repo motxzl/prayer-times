@@ -10,9 +10,9 @@ class PrayerTimesApp {
         this.countdownInterval = null;
         this.currentTimeInterval = null;
         this.settings = {
-            timeFormat: localStorage.getItem('timeFormat') || '24',
+            timeFormat: localStorage.getItem('timeFormat') || '12',
             calculationMethod: localStorage.getItem('calculationMethod') || '5',
-            theme: localStorage.getItem('theme') || 'dark',
+            theme: localStorage.getItem('theme') || 'light',
             language: localStorage.getItem('language') || 'en'
         };
 
@@ -231,11 +231,11 @@ class PrayerTimesApp {
         document.getElementById('calculation-method').value = this.settings.calculationMethod;
 
         // Apply theme
-        if (this.settings.theme === 'light') {
-            document.body.classList.remove('dark');
+        if (this.settings.theme === 'dark') {
+            document.body.classList.add('dark');
             document.getElementById('theme-toggle').innerHTML = '<i class="fas fa-sun mr-2"></i><span>Light Mode</span>';
         } else {
-            document.body.classList.add('dark');
+            document.body.classList.remove('dark');
             document.getElementById('theme-toggle').innerHTML = '<i class="fas fa-moon mr-2"></i><span>Dark Mode</span>';
         }
     }
