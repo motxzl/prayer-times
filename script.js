@@ -9,6 +9,9 @@ class PrayerTimesApp {
         this.nextPrayer = null;
         this.countdownInterval = null;
         this.currentTimeInterval = null;
+        this.deferredPrompt = null; // For PWA install
+        this.qiblaBearing = 0; // Store Qibla direction for compass
+        this.deviceHeading = 0; // Current device heading from compass
         this.settings = {
             timeFormat: localStorage.getItem('timeFormat') || '12',
             calculationMethod: localStorage.getItem('calculationMethod') || '5',
@@ -123,8 +126,10 @@ class PrayerTimesApp {
         this.loadSettings();
         this.startCurrentTime();
         this.updateCitySuggestions(''); // Initialize with popular cities
-        this.detectLocation();
+        this.setDefaultLocation(); // Set default location immediately
         this.hideLoading();
+        // Try to detect location in background
+        this.detectLocation();
     }
 
     bindEvents() {
@@ -215,6 +220,264 @@ class PrayerTimesApp {
                 this.hideCitySuggestionList();
             }
         });
+
+        // PWA Install functionality
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            this.deferredPrompt = e;
+            this.showInstallButton();
+        });
+
+        window.addEventListener('appinstalled', () => {
+            this.hideInstallButton();
+            this.deferredPrompt = null;
+        });
+
+        // Install button click
+        document.getElementById('install-button').addEventListener('click', () => {
+            this.installApp();
+        });
+
+        // For testing: show button if running on localhost or if no beforeinstallprompt fired
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            setTimeout(() => {
+                if (!this.deferredPrompt) {
+                    this.showInstallButton();
+                }
+            }, 2000); // Show after 2 seconds for testing
+        }
+
+        // Device Orientation Listener for Qibla Compass
+        // Updates needle rotation as user rotates their phone
+        this.setupDeviceOrientation();
+    }
+
+    // Setup device orientation detection for dynamic Qibla compass
+    setupDeviceOrientation() {
+        // Check for iOS 13+ which requires explicit permission
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS 13+: requires user permission
+            document.addEventListener('click', () => {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            console.log('iOS compass permission granted');
+                            this.startCompassTracking();
+                        } else {
+                            console.log('iOS compass permission denied');
+                        }
+                    })
+                    .catch(error => console.log('iOS compass error:', error));
+            }, { once: true });
+        } else if (typeof DeviceOrientationEvent !== 'undefined') {
+            // Android: No permission needed, start immediately
+            console.log('Android detected - starting compass tracking without permission');
+            this.startCompassTracking();
+        } else {
+            console.warn('Device Orientation API not supported on this device');
+        }
+    }
+
+    // Start listening to device orientation changes
+    startCompassTracking() {
+        if (typeof DeviceOrientationEvent === 'undefined') return;
+
+        console.log('Compass tracking started');
+
+        // Android primary event: deviceorientationabsolute
+        // Provides orientation relative to Earth's coordinate frame
+        window.addEventListener('deviceorientationabsolute', (event) => {
+            const heading = this.getDeviceHeadingFromEvent(event);
+            if (heading !== null) {
+                this.deviceHeading = heading;
+                this.updateCompassNeedle();
+            }
+        }, { passive: true });
+
+        // Fallback: deviceorientation
+        window.addEventListener('deviceorientation', (event) => {
+            const heading = this.getDeviceHeadingFromEvent(event);
+            if (heading !== null) {
+                this.deviceHeading = heading;
+                this.updateCompassNeedle();
+            }
+        }, { passive: true });
+    }
+
+    // Convert device orientation event data into a compass heading in degrees
+    getDeviceHeadingFromEvent(event) {
+        // iOS-specific heading
+        if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
+            return event.webkitCompassHeading;
+        }
+
+        // If alpha is unavailable, we cannot determine heading
+        if (event.alpha === null || event.alpha === undefined) {
+            return null;
+        }
+
+        // Android / generic heading handling.
+        // event.alpha is the rotation around the z axis. For many browsers,
+        // it represents the device heading when combined with screen orientation.
+        const screenAngle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+        let heading = event.alpha;
+
+        // If the event is absolute, some browsers report alpha relative to north.
+        // Otherwise, we adjust with the screen orientation.
+        if (event.absolute) {
+            heading = 360 - heading;
+        }
+
+        heading = heading + screenAngle;
+        heading = (heading + 360) % 360;
+        return heading;
+    }
+
+    // Update needle rotation based on device heading and Qibla bearing
+    updateCompassNeedle() {
+        const needle = document.getElementById('qibla-needle');
+        if (!needle) return;
+
+        // Calculate needle rotation:
+        // The needle should point toward Qibla relative to magnetic north.
+        const needleRotation = this.qiblaBearing - this.deviceHeading;
+
+        needle.style.transition = 'transform 0.15s ease-out';
+        needle.style.transform = `rotate(${needleRotation}deg)`;
+
+        const debugHeading = document.getElementById('debug-heading');
+        const debugBearing = document.getElementById('debug-bearing');
+        if (debugHeading) debugHeading.textContent = `${Math.round(this.deviceHeading)}°`;
+        if (debugBearing) debugBearing.textContent = `${Math.round(this.qiblaBearing)}°`;
+    }
+
+    // PWA Install methods
+    showInstallButton() {
+        const button = document.getElementById('install-button');
+        button.classList.remove('hidden');
+    }
+
+    hideInstallButton() {
+        const button = document.getElementById('install-button');
+        button.classList.add('hidden');
+    }
+
+    installApp() {
+        if (this.deferredPrompt) {
+            this.deferredPrompt.prompt();
+            this.deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
+                } else {
+                    console.log('User dismissed the install prompt');
+                }
+                this.deferredPrompt = null;
+            });
+        } else {
+            // For testing purposes when no prompt is available
+            alert('Install prompt not available. In a real PWA, this would show the native install dialog.');
+            this.hideInstallButton();
+        }
+    }
+
+    // ========================================
+    // QIBLA DIRECTION CALCULATION
+    // ========================================
+    // Calculates the bearing (angle) from the user's location to Mecca (Kaaba)
+    // Using the great-circle bearing formula (inverse Haversine)
+    
+    calculateQibla() {
+        if (!this.currentLocation) return;
+
+        // Kaaba (Holy Mosque/Masjid al-Haram) coordinates in Mecca, Saudi Arabia
+        const kaaba = {
+            latitude: 21.4225,   // 21.4225° North
+            longitude: 39.8262   // 39.8262° East
+        };
+
+        // User's location coordinates (converted to radians for trigonometry)
+        const userLatRad = (this.currentLocation.lat * Math.PI) / 180;
+        const userLonRad = (this.currentLocation.lng * Math.PI) / 180;
+        const kaabaLatRad = (kaaba.latitude * Math.PI) / 180;
+        const kaabaLonRad = (kaaba.longitude * Math.PI) / 180;
+
+        // Calculate the difference in longitude
+        const deltaLon = kaabaLonRad - userLonRad;
+
+        // Great-circle bearing formula (atan2 method)
+        // This calculates the initial bearing/azimuth from user to Kaaba
+        const y = Math.sin(deltaLon) * Math.cos(kaabaLatRad);
+        const x = Math.cos(userLatRad) * Math.sin(kaabaLatRad) - 
+                  Math.sin(userLatRad) * Math.cos(kaabaLatRad) * Math.cos(deltaLon);
+        
+        let bearing = Math.atan2(y, x);
+
+        // Convert from radians to degrees
+        bearing = (bearing * 180) / Math.PI;
+
+        // Normalize bearing to 0-360° range
+        // (atan2 returns values in -180 to 180, so we add 360 and mod 360 to get 0-360)
+        bearing = (bearing + 360) % 360;
+
+        // Store the bearing for use by the compass
+        this.qiblaBearing = bearing;
+
+        // Update the UI with the calculated bearing
+        this.updateQiblaDisplay(bearing);
+    }
+
+    updateQiblaDisplay(bearing) {
+        // Round to nearest degree for display
+        const roundedBearing = Math.round(bearing);
+
+        // Update the angle display (e.g., "45°")
+        const angleElement = document.getElementById('qibla-angle');
+        if (angleElement) {
+            angleElement.textContent = `${roundedBearing}°`;
+        }
+
+        // For initial display, rotate needle to bearing (static display)
+        // Once device orientation is available, updateCompassNeedle will override this
+        const needle = document.getElementById('qibla-needle');
+        if (needle) {
+            needle.style.transition = 'transform 0.5s ease-in-out';
+            needle.style.transform = `rotate(${bearing}deg)`;
+        }
+
+        // Determine and display the cardinal/intercardinal direction name
+        let directionName = 'North';
+        if (bearing >= 337.5 || bearing < 22.5) directionName = 'North - شمال';
+        else if (bearing >= 22.5 && bearing < 67.5) directionName = 'Northeast - شمال شرق';
+        else if (bearing >= 67.5 && bearing < 112.5) directionName = 'East - شرق';
+        else if (bearing >= 112.5 && bearing < 157.5) directionName = 'Southeast - جنوب شرق';
+        else if (bearing >= 157.5 && bearing < 202.5) directionName = 'South - جنوب';
+        else if (bearing >= 202.5 && bearing < 247.5) directionName = 'Southwest - جنوب غرب';
+        else if (bearing >= 247.5 && bearing < 292.5) directionName = 'West - غرب';
+        else if (bearing >= 292.5 && bearing < 337.5) directionName = 'Northwest - شمال غرب';
+
+        // Update direction display
+        const directionElement = document.getElementById('qibla-direction');
+        if (directionElement) {
+            directionElement.textContent = directionName;
+        }
+
+        // Update location display - show which city the direction is calculated from
+        let locationText = 'Calculating location...';
+        if (this.currentLocation) {
+            if (this.currentLocation.city) {
+                locationText = `${this.currentLocation.city}${this.currentLocation.country ? ', ' + this.currentLocation.country : ''}`;
+            } else if (this.currentLocation.lat && this.currentLocation.lng) {
+                locationText = `${this.currentLocation.lat.toFixed(4)}°, ${this.currentLocation.lng.toFixed(4)}°`;
+            }
+        }
+        
+        const locationElement = document.getElementById('qibla-location');
+        if (locationElement) {
+            locationElement.textContent = locationText;
+        }
+
+        // Trigger compass needle update to enable dynamic tracking if device orientation is available
+        this.updateCompassNeedle();
     }
 
     hideLoading() {
@@ -291,6 +554,8 @@ class PrayerTimesApp {
 
             // Get location name from coordinates
             await this.reverseGeocode(position.coords.latitude, position.coords.longitude);
+            // Calculate Qibla direction
+            this.calculateQibla();
             await this.fetchPrayerTimes();
 
         } catch (error) {
@@ -325,6 +590,12 @@ class PrayerTimesApp {
             const city = data.city || data.locality || 'Unknown City';
             const country = data.countryName || 'Unknown Country';
 
+            // Update currentLocation with city name for Qibla display
+            if (this.currentLocation) {
+                this.currentLocation.city = city;
+                this.currentLocation.country = country;
+            }
+
             document.getElementById('current-location').textContent = `${city}, ${country}`;
             document.getElementById('city-input').value = city;
             document.getElementById('country-input').value = country;
@@ -338,11 +609,33 @@ class PrayerTimesApp {
         }
     }
 
+    async geocodeCity(city, country) {
+        try {
+            // Use Open-Meteo Geocoding API (free, no API key needed)
+            const response = await fetch(
+                `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&language=en&limit=1`
+            );
+            const data = await response.json();
+
+            if (data.results && data.results.length > 0) {
+                const result = data.results[0];
+                this.currentLocation.lat = result.latitude;
+                this.currentLocation.lng = result.longitude;
+                this.currentLocation.method = 'coordinates'; // Switch to coordinate method for better accuracy
+            }
+        } catch (error) {
+            console.warn('Geocoding failed, will use city name only:', error);
+            // If geocoding fails, we'll just use city name (fallback to city-based prayer times API)
+        }
+    }
+
     setDefaultLocation() {
         this.currentLocation = {
             city: 'Cairo',
             country: 'Egypt',
-            method: 'city'
+            lat: 30.0444,
+            lng: 31.2357,
+            method: 'coordinates' // Use coordinates for better accuracy
         };
         document.getElementById('current-location').textContent = 'Cairo, Egypt';
         document.getElementById('city-input').value = 'Cairo';
@@ -351,6 +644,8 @@ class PrayerTimesApp {
         // Update city suggestions for Egypt
         this.updateCitySuggestions('Egypt');
 
+        // Calculate Qibla direction
+        this.calculateQibla();
         this.fetchPrayerTimes();
     }
 
@@ -383,6 +678,11 @@ class PrayerTimesApp {
 
             document.getElementById('current-location').textContent = `${city}${country ? ', ' + country : ''}`;
 
+            // Get coordinates for Qibla calculation
+            await this.geocodeCity(city, country);
+            
+            // Calculate Qibla direction
+            this.calculateQibla();
             await this.fetchPrayerTimes();
 
             // Success - hide location settings and show success message
