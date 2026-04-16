@@ -2,6 +2,10 @@
 
 A beautiful, modern Islamic prayer times web application with automatic location detection, elegant design, and PWA capabilities.
 
+[![GitHub](https://img.shields.io/badge/GitHub-motxzl%2Fprayer--times-blue?logo=github)](https://github.com/motxzl/prayer-times)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/motxzl/prayer-times)](https://github.com/motxzl/prayer-times/stargazers)
+
 ## ✨ Features
 
 - **Automatic Location Detection**: Uses browser Geolocation API with fallback to manual city selection
@@ -17,6 +21,13 @@ A beautiful, modern Islamic prayer times web application with automatic location
 
 ## 🚀 Quick Start
 
+### From GitHub
+```bash
+git clone https://github.com/motxzl/prayer-times.git
+cd prayer-times
+```
+
+### Run the App
 1. **Open the project**: Navigate to the project folder in VS Code
 2. **Start a local server**: Use Live Server extension or any local server
 3. **Open `index.html`**: The app will load immediately
@@ -98,6 +109,40 @@ prayertimes/
 ## 🌙 Prayer Times Included
 
 - **Fajr** (Dawn Prayer)
+- **Dhuhr** (Noon Prayer)
+- **Asr** (Afternoon Prayer)
+- **Maghrib** (Sunset Prayer)
+- **Isha** (Night Prayer)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🐛 Issues & Bug Reports
+
+Found a bug? Have a feature request? Please [open an issue](https://github.com/motxzl/prayer-times/issues) on GitHub.
+
+## 📧 Contact
+
+For questions or feedback, please reach out through:
+- [GitHub Issues](https://github.com/motxzl/prayer-times/issues)
+- [GitHub Discussions](https://github.com/motxzl/prayer-times/discussions)
+
+## 🙏 Acknowledgments
+
+- [Aladhan API](https://aladhan.com/) for prayer times data
+- Tailwind CSS for styling framework
+- Font Awesome for icons
 - **Sunrise** (Sunrise Time)
 - **Dhuhr** (Noon Prayer)
 - **Asr** (Afternoon Prayer)
