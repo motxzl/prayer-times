@@ -30,7 +30,9 @@ cd prayer-times
 ### Run the App
 1. **Open the project**: Navigate to the project folder in VS Code
 2. **Start a local server**: Use Live Server extension or any local server
-3. **Open `index.html`**: The app will load immediately
+3. **Recommended local server**: `python -m http.server 8000 --bind 0.0.0.0`
+4. **Desktop URL**: `http://localhost:8000`
+5. **Mobile URL (same Wi-Fi)**: `http://YOUR_LAN_IP:8000` (example: `http://192.168.1.25:8000`)
 
 ### Alternative: Open Directly
 - Simply open `index.html` in any modern web browser

@@ -1,5 +1,9 @@
 /* Custom Styles for PrayerTimes */
 
+:root {
+    --install-translate-y: -18px;
+}
+
 /* Glassmorphism effects */
 .glass {
     backdrop-filter: blur(16px) saturate(180%);
@@ -21,6 +25,28 @@
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
     border-color: rgba(16, 185, 129, 0.4);
     box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+}
+
+.prayer-card.active {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+}
+
+.app-logo-image {
+    filter: drop-shadow(0 14px 24px rgba(4, 120, 87, 0.25));
+}
+
+.install-cta {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(var(--install-translate-y)) scale(0.96);
+}
+
+.install-cta.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
 }
 
 /* Loading animation */
@@ -72,6 +98,31 @@
 
     .text-4xl {
         font-size: 2.5rem;
+    }
+
+    .hero-brand {
+        gap: 0.9rem;
+    }
+
+    .logo-mark {
+        width: 4.5rem;
+        height: 4.5rem;
+        border-radius: 1.5rem;
+    }
+
+    .app-logo-image {
+        width: 2.7rem;
+        height: 2.7rem;
+    }
+
+    .hero-brand-copy {
+        max-width: 16rem;
+    }
+
+    .install-cta {
+        left: 1rem;
+        right: 1rem;
+        justify-content: center;
     }
 }
 
@@ -254,7 +305,8 @@ body:not(.dark) .glass {
 
 body:not(.dark) .bg-slate-800\/30,
 body:not(.dark) .bg-slate-800\/40,
-body:not(.dark) .bg-slate-800\/50 {
+body:not(.dark) .bg-slate-800\/50,
+body:not(.dark) .bg-slate-800\/60 {
     background-color: rgba(226, 232, 240, 0.7) !important;
     border-color: #cbd5e1 !important;
 }
@@ -263,8 +315,16 @@ body:not(.dark) .bg-slate-700\/50 {
     background-color: rgba(203, 213, 225, 0.7) !important;
 }
 
+body:not(.dark) .bg-slate-700 {
+    background-color: #cbd5e1 !important;
+}
+
 body:not(.dark) .bg-slate-900\/95 {
     background-color: rgba(248, 250, 252, 0.98) !important;
+}
+
+body:not(.dark) .bg-slate-900\/30 {
+    background-color: rgba(248, 250, 252, 0.92) !important;
 }
 
 body:not(.dark) #next-prayer-card,
@@ -293,6 +353,48 @@ body:not(.dark) #location-toggle:hover {
     background-color: rgba(203, 213, 225, 0.95) !important;
 }
 
+/* Notification controls in light mode */
+body:not(.dark) #notif-row {
+    background-color: rgba(226, 232, 240, 0.75) !important;
+    border-color: #cbd5e1 !important;
+}
+
+body:not(.dark) #notif-row:hover,
+body:not(.dark) .hover\:bg-slate-800\/45:hover {
+    background-color: rgba(203, 213, 225, 0.95) !important;
+}
+
+body:not(.dark) #notif-track {
+    background-color: #cbd5e1 !important;
+}
+
+body:not(.dark) #notif-track::after,
+body:not(.dark) #notif-sound-track::after {
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28) !important;
+}
+
+body:not(.dark) #notif-track[data-on="true"],
+body:not(.dark) #notif-sound-track[data-on="true"] {
+    background-color: #10b981 !important;
+}
+
+body:not(.dark) #notif-sound-track {
+    background-color: #cbd5e1 !important;
+}
+
+body:not(.dark) #alerts-status-pill {
+    border-color: rgba(148, 163, 184, 0.45) !important;
+    background-color: rgba(241, 245, 249, 0.95) !important;
+    color: #334155 !important;
+}
+
+body:not(.dark) #alerts-status-pill.text-emerald-300 {
+    border-color: rgba(16, 185, 129, 0.28) !important;
+    background-color: rgba(16, 185, 129, 0.12) !important;
+    color: #047857 !important;
+}
+
 /* Prayer cards */
 body:not(.dark) .prayer-card {
     background-color: rgba(255, 255, 255, 0.85) !important;
@@ -304,6 +406,11 @@ body:not(.dark) .prayer-card:hover {
 }
 
 body:not(.dark) .prayer-card.current {
+    background: linear-gradient(135deg, rgba(5, 150, 105, 0.15), rgba(5, 150, 105, 0.08)) !important;
+    border-color: rgba(5, 150, 105, 0.5) !important;
+}
+
+body:not(.dark) .prayer-card.active {
     background: linear-gradient(135deg, rgba(5, 150, 105, 0.15), rgba(5, 150, 105, 0.08)) !important;
     border-color: rgba(5, 150, 105, 0.5) !important;
 }
@@ -336,7 +443,8 @@ body:not(.dark) .border-white\/10 {
 }
 
 body:not(.dark) .border-slate-700\/50,
-body:not(.dark) .border-slate-600 {
+body:not(.dark) .border-slate-600,
+body:not(.dark) .border-slate-600\/40 {
     border-color: #cbd5e1 !important;
 }
 
@@ -413,4 +521,23 @@ body:not(.dark) #countdown {
 
 body:not(.dark) #qibla-needle .bg-gradient-to-b {
     box-shadow: 0 0 14px rgba(5, 150, 105, 0.45) !important;
+}
+
+body:not(.dark) #bottom-nav-shell {
+    background: rgba(255, 255, 255, 0.88) !important;
+    border-color: rgba(148, 163, 184, 0.45) !important;
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.12) !important;
+}
+
+body:not(.dark) .nav-tab {
+    color: #475569 !important;
+}
+
+body:not(.dark) .nav-tab:hover,
+body:not(.dark) .nav-tab[aria-current="page"] {
+    color: #047857 !important;
+}
+
+body:not(.dark) .install-cta {
+    box-shadow: 0 18px 42px rgba(5, 150, 105, 0.18) !important;
 }
