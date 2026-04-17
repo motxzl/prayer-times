@@ -190,61 +190,176 @@ select:focus {
 
 /* Light Mode Styles */
 body:not(.dark) {
-    background: linear-gradient(to-br, #f8fafc, #e2e8f0, #f8fafc);
-    color: #1e293b;
+    background: linear-gradient(135deg, #f0fdf4, #e2e8f0, #f8fafc) !important;
+    color: #0f172a;
 }
 
-body:not(.dark) .glass,
-body:not(.dark) .bg-white\/10 {
-    background-color: rgba(255, 255, 255, 0.8);
-    border-color: rgba(0, 0, 0, 0.1);
-    color: #1e293b;
+body.light {
+    color-scheme: light;
 }
 
-body:not(.dark) .text-slate-300 {
-    color: #64748b;
+/* Force all text to be dark in light mode */
+body:not(.dark),
+body:not(.dark) * {
+    color: inherit;
 }
 
-body:not(.dark) .text-slate-400 {
-    color: #94a3b8;
-}
-
-body:not(.dark) .text-islamic-green {
-    color: #059669;
-}
-
-body:not(.dark) .bg-slate-800\/50 {
-    background-color: rgba(241, 245, 249, 0.8);
-    border-color: #cbd5e1;
-    color: #1e293b;
-}
-
-body:not(.dark) .bg-slate-600 {
-    background-color: #e2e8f0;
-    color: #1e293b;
-}
-
+/* Base text colors for light mode */
 body:not(.dark) .text-white,
 body:not(.dark) .text-slate-100,
 body:not(.dark) .text-slate-50 {
     color: #0f172a !important;
 }
 
+body:not(.dark) .text-slate-200 {
+    color: #1e293b !important;
+}
+
+body:not(.dark) .text-slate-300 {
+    color: #334155 !important;
+}
+
+body:not(.dark) .text-slate-400 {
+    color: #475569 !important;
+}
+
+body:not(.dark) .text-slate-500 {
+    color: #64748b !important;
+}
+
+body:not(.dark) .text-emerald-300 {
+    color: #047857 !important;
+}
+
+body:not(.dark) .text-emerald-400 {
+    color: #059669 !important;
+}
+
+/* Keep green accent color readable on light bg */
+body:not(.dark) .text-islamic-green {
+    color: #047857 !important;
+}
+
+/* Card and panel backgrounds */
+body:not(.dark) .bg-white\/5,
+body:not(.dark) .bg-white\/10 {
+    background-color: rgba(255, 255, 255, 0.85) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+body:not(.dark) .glass {
+    background-color: rgba(255, 255, 255, 0.85) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+body:not(.dark) .bg-slate-800\/30,
+body:not(.dark) .bg-slate-800\/40,
+body:not(.dark) .bg-slate-800\/50 {
+    background-color: rgba(226, 232, 240, 0.7) !important;
+    border-color: #cbd5e1 !important;
+}
+
+body:not(.dark) .bg-slate-700\/50 {
+    background-color: rgba(203, 213, 225, 0.7) !important;
+}
+
 body:not(.dark) .bg-slate-900\/95 {
-    background-color: rgba(241, 245, 249, 0.95);
+    background-color: rgba(248, 250, 252, 0.98) !important;
+}
+
+body:not(.dark) #next-prayer-card,
+body:not(.dark) #location-settings,
+body:not(.dark) #city-suggestion-list,
+body:not(.dark) #theme-toggle,
+body:not(.dark) #manual-location {
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08) !important;
+}
+
+body:not(.dark) #next-prayer-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(236, 253, 245, 0.92)) !important;
+    border-color: rgba(5, 150, 105, 0.18) !important;
+}
+
+body:not(.dark) #theme-toggle,
+body:not(.dark) #manual-location,
+body:not(.dark) #location-toggle {
+    background-color: rgba(226, 232, 240, 0.88) !important;
+    color: #0f172a !important;
+}
+
+body:not(.dark) #theme-toggle:hover,
+body:not(.dark) #manual-location:hover,
+body:not(.dark) #location-toggle:hover {
+    background-color: rgba(203, 213, 225, 0.95) !important;
+}
+
+/* Prayer cards */
+body:not(.dark) .prayer-card {
+    background-color: rgba(255, 255, 255, 0.85) !important;
+    border-color: rgba(0,0,0,0.08) !important;
+}
+
+body:not(.dark) .prayer-card:hover {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body:not(.dark) .prayer-card.current {
+    background: linear-gradient(135deg, rgba(5, 150, 105, 0.15), rgba(5, 150, 105, 0.08)) !important;
+    border-color: rgba(5, 150, 105, 0.5) !important;
+}
+
+/* Loading screen in light mode */
+body:not(.dark) #loading {
+    background: linear-gradient(135deg, #f0fdf4, #e2e8f0, #f8fafc) !important;
+}
+
+/* Inputs and selects */
+body:not(.dark) input,
+body:not(.dark) select {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    border-color: #94a3b8 !important;
+    color: #0f172a !important;
+}
+
+body:not(.dark) input::placeholder {
+    color: #64748b !important;
+}
+
+body:not(.dark) select option {
+    background-color: #ffffff;
     color: #0f172a;
 }
 
+/* Borders */
+body:not(.dark) .border-white\/10 {
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+body:not(.dark) .border-slate-700\/50,
+body:not(.dark) .border-slate-600 {
+    border-color: #cbd5e1 !important;
+}
+
+/* Countdown/next prayer section */
+body:not(.dark) .font-mono {
+    color: #0f172a !important;
+}
+
+/* Debug info panel */
+body:not(.dark) .text-slate-500.font-mono {
+    color: #475569 !important;
+}
+
+/* Buttons */
+body:not(.dark) .bg-slate-600,
 body:not(.dark) .hover\:bg-slate-500:hover {
-    background-color: #cbd5e1;
+    background-color: #e2e8f0 !important;
+    color: #0f172a !important;
 }
 
-body:not(.dark) .bg-red-500\/90 {
-    background-color: rgba(239, 68, 68, 0.9);
-}
-
+/* Datalist */
 body:not(.dark) datalist {
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.98);
     border-color: #cbd5e1;
 }
 
@@ -257,8 +372,24 @@ body:not(.dark) datalist option:hover {
     background: rgba(5, 150, 105, 0.1);
 }
 
+/* City suggestion list */
+body:not(.dark) #city-suggestion-list {
+    background-color: rgba(255, 255, 255, 0.98) !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+body:not(.dark) #city-suggestion-list li {
+    color: #0f172a !important;
+}
+
+body:not(.dark) #city-suggestion-list li:hover {
+    background-color: rgba(5, 150, 105, 0.1) !important;
+}
+
+/* Scrollbar in light mode */
 body:not(.dark) ::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.1);
+    background: rgba(0, 0, 0, 0.05);
 }
 
 body:not(.dark) ::-webkit-scrollbar-thumb {
@@ -267,4 +398,19 @@ body:not(.dark) ::-webkit-scrollbar-thumb {
 
 body:not(.dark) ::-webkit-scrollbar-thumb:hover {
     background: rgba(5, 150, 105, 0.5);
+}
+
+/* Qibla compass in light mode */
+body:not(.dark) .text-slate-400.font-bold {
+    color: #334155 !important;
+}
+
+body:not(.dark) #qibla-direction,
+body:not(.dark) #current-time,
+body:not(.dark) #countdown {
+    color: #0f172a !important;
+}
+
+body:not(.dark) #qibla-needle .bg-gradient-to-b {
+    box-shadow: 0 0 14px rgba(5, 150, 105, 0.45) !important;
 }
