@@ -81,12 +81,16 @@ const CITIES = {
 // ─── App class ────────────────────────────────────────────────────────
 class IslamTimes {
     constructor() {
+        const savedNotifOffset = parseInt(localStorage.getItem('it_notif_offset') || '10', 10);
+
         // Settings with localStorage persistence
         this.s = {
             timeFormat: localStorage.getItem('it_fmt') || '12',
             method: localStorage.getItem('it_method') || '5',
             theme: localStorage.getItem('it_theme') || 'dark',
-            notifs: localStorage.getItem('it_notifs') === 'true'
+            notifs: localStorage.getItem('it_notifs') === 'true',
+            notifOffset: [10, 15, 20, 25].includes(savedNotifOffset) ? savedNotifOffset : 10,
+            notifSound: localStorage.getItem('it_notif_sound') !== 'false'
         };
 
         // State
@@ -104,6 +108,8 @@ class IslamTimes {
         this._orientationHandler = null;
         this._smoothedHeading = null;
         this._eventsInterval = null;
+        this._swRegistration = null;
+        this._audioCtx = null;
 
         this.init();
     }
@@ -117,6 +123,14 @@ class IslamTimes {
         this._bindEvents();
         this._startClock();
         this._startEventCountdowns();
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready
+                .then(reg => {
+                    this._swRegistration = reg;
+                })
+                .catch(() => {});
+        }
 
         // Default: Cairo — loads prayer times immediately without waiting for GPS
         this._setLocation({ lat: 30.0444, lng: 31.2357, city: 'Cairo', country: 'Egypt' });
@@ -554,7 +568,11 @@ class IslamTimes {
     async _toggleNotifs() {
         if (!this.s.notifs) {
             const ok = await this._requestNotifPermission();
-            if (!ok) { this._showErr('Please allow notifications in your browser settings.'); return; }
+            if (!ok) {
+                if (typeof window.updateAlertsBadge === 'function') window.updateAlertsBadge();
+                this._showErr('Please allow notifications in your browser settings.');
+                return;
+            }
         }
         this.s.notifs = !this.s.notifs;
         localStorage.setItem('it_notifs', this.s.notifs);
@@ -571,13 +589,38 @@ class IslamTimes {
             track.dataset.on = this.s.notifs ? 'true' : 'false';
         }
         if (lbl) lbl.textContent = this.s.notifs ? 'On' : 'Off';
+        this._updateNotifOffsetSummary();
         if (typeof window.updateAlertsBadge === 'function') window.updateAlertsBadge();
+    }
+
+    _toggleNotifSound() {
+        this.s.notifSound = !this.s.notifSound;
+        localStorage.setItem('it_notif_sound', this.s.notifSound ? 'true' : 'false');
+        this._updateNotifSoundToggle();
+    }
+
+    _updateNotifSoundToggle() {
+        const track = document.getElementById('notif-sound-track');
+        const lbl = document.getElementById('notif-sound-lbl');
+        if (track) {
+            track.classList.toggle('on', this.s.notifSound);
+            track.dataset.on = this.s.notifSound ? 'true' : 'false';
+        }
+        if (lbl) lbl.textContent = this.s.notifSound ? 'On' : 'Off';
+    }
+
+    _updateNotifOffsetSummary() {
+        const desc = document.getElementById('notif-description');
+        if (desc) {
+            desc.textContent = `Receive reminders ${this.s.notifOffset} minutes before upcoming prayers.`;
+        }
     }
 
     _scheduleNotifications() {
         this._clearNotifTimers();
         if (!this.times || !this.s.notifs) return;
         const now = new Date();
+        const offsetMs = this.s.notifOffset * 60000;
 
         for (const name of MAIN_PRAYERS) {
             const raw = this.times[name];
@@ -585,15 +628,28 @@ class IslamTimes {
             const [h, m] = raw.split(':').map(Number);
             const target = new Date();
             target.setHours(h, m, 0, 0);
-            const diff = target - now;
+            target.setTime(target.getTime() - offsetMs);
+            let diff = target - now;
+            if (diff <= 0) diff += 86400000;
             if (diff > 0 && diff < 86400000) {
                 const t = setTimeout(() => {
                     if (Notification.permission === 'granted') {
-                        new Notification(`🕌 ${name} — ${ARABIC[name]}`, {
-                            body: `It's time for ${name} prayer (${this._fmt(raw)})`,
-                            icon: '/icon-192.png',
-                            tag: name
-                        });
+                        const shouldPlaySound = this.s.notifSound;
+                        const payload = {
+                            body: `${this.s.notifOffset} minutes until ${name} prayer (${this._fmt(raw)})`,
+                            icon: 'icons/icon-192.png',
+                            badge: 'icons/icon-192.png',
+                            tag: `prayer-${name.toLowerCase()}-${this.s.notifOffset}`,
+                            silent: !shouldPlaySound
+                        };
+
+                        if (this._swRegistration?.showNotification) {
+                            this._swRegistration.showNotification(`Prayer Reminder: ${name}`, payload);
+                        } else {
+                            new Notification(`Prayer Reminder: ${name}`, payload);
+                        }
+
+                        if (shouldPlaySound) this._playNotifSound();
                     }
                 }, diff);
                 this._notifTimers.push(t);
@@ -604,6 +660,33 @@ class IslamTimes {
     _clearNotifTimers() {
         this._notifTimers.forEach(t => clearTimeout(t));
         this._notifTimers = [];
+    }
+
+    _playNotifSound() {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            if (!this._audioCtx) this._audioCtx = new AudioCtx();
+            if (this._audioCtx.state === 'suspended') this._audioCtx.resume().catch(() => {});
+
+            const ctx = this._audioCtx;
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, now);
+            osc.frequency.exponentialRampToValueAtTime(660, now + 0.15);
+
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.22);
+        } catch (_) {}
     }
 
     // ─────────────────────────────────────────────
@@ -671,11 +754,14 @@ class IslamTimes {
         // Selects
         const methodSel = this._getEl('method-sel');
         const fmtSel = this._getEl('format-sel');
+        const notifOffsetSel = this._getEl('notif-offset-sel');
         if (methodSel) methodSel.value = this.s.method;
         if (fmtSel) fmtSel.value = this.s.timeFormat;
+        if (notifOffsetSel) notifOffsetSel.value = String(this.s.notifOffset);
 
         // Notif toggle
         this._updateNotifToggle();
+        this._updateNotifSoundToggle();
     }
 
     // ─────────────────────────────────────────────
@@ -730,17 +816,46 @@ class IslamTimes {
     // ─────────────────────────────────────────────
     _showInstallBtn() {
         const btn = this._getEl('install-btn');
-        if (btn) btn.classList.add('visible');
+        if (!btn || this._isStandalone()) return;
+        btn.classList.remove('hidden');
+        btn.classList.add('flex');
+        btn.classList.add('visible');
+    }
+
+    _hideInstallBtn() {
+        const btn = this._getEl('install-btn');
+        if (!btn) return;
+        btn.classList.remove('visible');
+        btn.classList.remove('flex');
+        btn.classList.add('hidden');
+    }
+
+    _syncInstallButtonVisibility() {
+        if (this._isStandalone()) this._hideInstallBtn();
+        else this._showInstallBtn();
     }
 
     async _installApp() {
-        if (!this._pwaPrompt) return;
-        this._pwaPrompt.prompt();
-        const { outcome } = await this._pwaPrompt.userChoice;
-        if (outcome === 'accepted') {
-            this._getEl('install-btn')?.classList.remove('visible');
+        if (this._isStandalone()) {
+            this._showToast('The app is already installed.');
+            this._hideInstallBtn();
+            return;
         }
-        this._pwaPrompt = null;
+
+        if (this._pwaPrompt) {
+            this._pwaPrompt.prompt();
+            const { outcome } = await this._pwaPrompt.userChoice;
+            if (outcome === 'accepted') this._hideInstallBtn();
+            this._pwaPrompt = null;
+            return;
+        }
+
+        if (this._isIos()) {
+            this._showToast('On iPhone: tap Share, then Add to Home Screen.');
+            return;
+        }
+
+        this._showToast('Use your browser menu to install this app.');
     }
 
     // ─────────────────────────────────────────────
@@ -801,6 +916,19 @@ class IslamTimes {
             this._renderTimes();
             this._calcNext();
         });
+        this._getEl('notif-offset-sel')?.addEventListener('change', e => {
+            this.s.notifOffset = parseInt(e.target.value, 10) || 10;
+            localStorage.setItem('it_notif_offset', String(this.s.notifOffset));
+            this._updateNotifOffsetSummary();
+            if (this.s.notifs && this.times) this._scheduleNotifications();
+        });
+        document.getElementById('notif-sound-row')?.addEventListener('click', () => this._toggleNotifSound());
+        document.getElementById('notif-sound-row')?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                this._toggleNotifSound();
+            }
+        });
 
         // In-settings toggles (duplicate of header for convenience)
         document.getElementById('notif-row')?.addEventListener('click', () => this._toggleNotifs());
@@ -810,12 +938,19 @@ class IslamTimes {
         window.addEventListener('beforeinstallprompt', e => {
             e.preventDefault();
             this._pwaPrompt = e;
-            this._showInstallBtn();
+            this._syncInstallButtonVisibility();
         });
         window.addEventListener('appinstalled', () => {
-            this._getEl('install-btn')?.classList.remove('visible');
+            this._hideInstallBtn();
+            this._showToast('PrayerTimes installed successfully.');
         });
         this._getEl('install-btn')?.addEventListener('click', () => this._installApp());
+
+        window.addEventListener('load', () => this._syncInstallButtonVisibility(), { once: true });
+        window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change', () => this._syncInstallButtonVisibility());
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) this._syncInstallButtonVisibility();
+        });
 
         // Close location panel when clicking outside
         document.addEventListener('click', e => {
@@ -890,6 +1025,7 @@ class IslamTimes {
             'theme-btn': ['theme-toggle'],
             'method-sel': ['calculation-method'],
             'format-sel': ['time-format'],
+            'notif-offset-sel': ['notification-offset'],
             'country-sel': ['country-input'],
             'city-inp': ['city-input'],
             'city-drop': ['city-suggestion-list'],
@@ -926,6 +1062,14 @@ class IslamTimes {
 
     _shortestAngleDelta(from, to) {
         return ((to - from + 540) % 360) - 180;
+    }
+
+    _isStandalone() {
+        return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+
+    _isIos() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     }
 }
 

@@ -4,8 +4,8 @@
  * network-first for API calls so prayer times always stay fresh).
  */
 
-const CACHE = 'islamtimes-v2';
-const SHELL = ['/', '/index.html', '/style.css', '/script.js', '/manifest.json'];
+const CACHE = 'islamtimes-v3';
+const SHELL = ['/', '/index.html', '/style.css', '/script.js', '/manifest.json', '/icons/app-icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 // ─── Install: pre-cache app shell ──────────────────────────────────────
 self.addEventListener('install', e => {
