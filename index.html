@@ -447,6 +447,20 @@
                 </select>
             </div>
 
+            <div id="mobile-reminder-card" class="mt-4 rounded-2xl border border-emerald-400/20 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-slate-900/30 p-4 md:hidden">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Next Reminder</p>
+                        <p id="mobile-reminder-name" class="mt-2 text-lg font-semibold text-white">Loading...</p>
+                        <p id="mobile-reminder-detail" class="mt-1 text-xs text-slate-300">Checking the next pre-prayer reminder.</p>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-right shadow-lg">
+                        <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Starts In</p>
+                        <p id="mobile-reminder-countdown" class="mt-1 text-2xl font-mono font-bold text-white">--:--:--</p>
+                    </div>
+                </div>
+            </div>
+
             <div id="notif-sound-row" class="mt-4 flex cursor-pointer items-center justify-between rounded-2xl border border-white/10 bg-slate-800/30 px-4 py-4 transition-all duration-150 hover:bg-slate-800/45 active:scale-[0.99]" role="button" tabindex="0" aria-label="Toggle notification sound">
                 <div>
                     <p class="text-sm font-medium text-white">Notification Sound</p>
@@ -558,7 +572,7 @@
     <!-- Install App Button -->
     <button id="install-button" class="install-cta fixed right-4 top-4 z-50 hidden items-center gap-3 rounded-2xl border border-islamic-green/50 bg-gradient-to-r from-islamic-green to-emerald-600 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur-xl transition-all duration-300 sm:right-6 sm:top-6 sm:px-6 sm:text-base">
         <i class="fas fa-mobile-alt text-xl"></i>
-        <span class="font-arabic">Install App - تثبيت التطبيق</span>
+        <span id="install-button-label" class="font-arabic">Install App - تثبيت التطبيق</span>
     </button>
 
     <!-- Bottom Navigation -->
