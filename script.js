@@ -110,6 +110,7 @@ class IslamTimes {
         this._eventsInterval = null;
         this._swRegistration = null;
         this._audioCtx = null;
+        this._installButtonTouchBound = false;
 
         this.init();
     }
@@ -348,6 +349,7 @@ class IslamTimes {
         this._setEl('cd-m', String(mins).padStart(2, '0'));
         this._setEl('cd-s', String(secs).padStart(2, '0'));
         this._setEl('countdown', countdown);
+        this._updateMobileReminder(now);
     }
 
     // ─────────────────────────────────────────────
@@ -614,6 +616,74 @@ class IslamTimes {
         if (desc) {
             desc.textContent = `Receive reminders ${this.s.notifOffset} minutes before upcoming prayers.`;
         }
+        this._updateMobileReminder();
+    }
+
+    _getNextReminder(now = new Date()) {
+        if (!this.times) return null;
+
+        let best = null;
+        let bestDiff = Infinity;
+        const offsetMs = this.s.notifOffset * 60000;
+
+        for (const name of MAIN_PRAYERS) {
+            const raw = this.times[name];
+            if (!raw) continue;
+
+            const [h, m] = raw.split(':').map(Number);
+            const reminderDate = new Date(now);
+            reminderDate.setHours(h, m, 0, 0);
+            reminderDate.setTime(reminderDate.getTime() - offsetMs);
+
+            let diff = reminderDate.getTime() - now.getTime();
+            if (diff <= 0) {
+                reminderDate.setDate(reminderDate.getDate() + 1);
+                diff = reminderDate.getTime() - now.getTime();
+            }
+
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = {
+                    name,
+                    prayerTime: raw,
+                    reminderDate,
+                    diff
+                };
+            }
+        }
+
+        return best;
+    }
+
+    _updateMobileReminder(now = new Date()) {
+        const nameEl = this._getEl('mobile-reminder-name');
+        const detailEl = this._getEl('mobile-reminder-detail');
+        const countdownEl = this._getEl('mobile-reminder-countdown');
+        if (!nameEl || !detailEl || !countdownEl) return;
+
+        if (!this.times) {
+            nameEl.textContent = 'Loading...';
+            detailEl.textContent = 'Checking the next pre-prayer reminder.';
+            countdownEl.textContent = '--:--:--';
+            return;
+        }
+
+        const reminder = this._getNextReminder(now);
+        if (!reminder) {
+            nameEl.textContent = 'Unavailable';
+            detailEl.textContent = 'Reminder timing is not available right now.';
+            countdownEl.textContent = '--:--:--';
+            return;
+        }
+
+        const totalSeconds = Math.max(0, Math.floor(reminder.diff / 1000));
+        const hrs = Math.floor(totalSeconds / 3600);
+        const mins = Math.floor((totalSeconds % 3600) / 60);
+        const secs = totalSeconds % 60;
+
+        nameEl.textContent = `${this.s.notifOffset} min before ${reminder.name}`;
+        detailEl.textContent = `${this._fmt(reminder.prayerTime)} prayer time${this.s.notifs ? '' : ' • alerts are off'}`;
+        countdownEl.textContent = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
 
     _scheduleNotifications() {
@@ -817,6 +887,7 @@ class IslamTimes {
     _showInstallBtn() {
         const btn = this._getEl('install-btn');
         if (!btn || this._isStandalone()) return;
+        this._updateInstallButtonLabel();
         btn.classList.remove('hidden');
         btn.classList.add('flex');
         btn.classList.add('visible');
@@ -831,8 +902,18 @@ class IslamTimes {
     }
 
     _syncInstallButtonVisibility() {
-        if (this._isStandalone()) this._hideInstallBtn();
-        else this._showInstallBtn();
+        if (this._isStandalone()) {
+            this._hideInstallBtn();
+            return;
+        }
+
+        if (!this._isMobileViewport()) {
+            this._showInstallBtn();
+            return;
+        }
+
+        this._updateInstallButtonLabel();
+        this._showInstallBtn();
     }
 
     async _installApp() {
@@ -847,6 +928,7 @@ class IslamTimes {
             const { outcome } = await this._pwaPrompt.userChoice;
             if (outcome === 'accepted') this._hideInstallBtn();
             this._pwaPrompt = null;
+            this._updateInstallButtonLabel();
             return;
         }
 
@@ -855,7 +937,29 @@ class IslamTimes {
             return;
         }
 
+        if (this._isMobileViewport()) {
+            this._showToast('Open the browser menu and choose Install app or Add to Home screen.');
+            return;
+        }
+
         this._showToast('Use your browser menu to install this app.');
+    }
+
+    _updateInstallButtonLabel() {
+        const label = this._getEl('install-button-label');
+        if (!label) return;
+
+        if (this._isIos()) {
+            label.textContent = 'Add to Home Screen - تثبيت التطبيق';
+            return;
+        }
+
+        if (this._isMobileViewport() && !this._pwaPrompt) {
+            label.textContent = 'Install Guide - تثبيت التطبيق';
+            return;
+        }
+
+        label.textContent = 'Install App - تثبيت التطبيق';
     }
 
     // ─────────────────────────────────────────────
@@ -944,7 +1048,15 @@ class IslamTimes {
             this._hideInstallBtn();
             this._showToast('PrayerTimes installed successfully.');
         });
-        this._getEl('install-btn')?.addEventListener('click', () => this._installApp());
+        const installBtn = this._getEl('install-btn');
+        installBtn?.addEventListener('click', () => this._installApp());
+        if (installBtn && !this._installButtonTouchBound) {
+            installBtn.addEventListener('touchend', (event) => {
+                event.preventDefault();
+                this._installApp();
+            }, { passive: false });
+            this._installButtonTouchBound = true;
+        }
 
         window.addEventListener('load', () => this._syncInstallButtonVisibility(), { once: true });
         window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change', () => this._syncInstallButtonVisibility());
@@ -1034,7 +1146,11 @@ class IslamTimes {
             'loc-btn': ['location-toggle'],
             'loc-panel': ['location-settings'],
             'next-name': ['next-prayer-name'],
-            'next-time': ['next-prayer-time']
+            'next-time': ['next-prayer-time'],
+            'mobile-reminder-name': ['mobile-reminder-name'],
+            'mobile-reminder-detail': ['mobile-reminder-detail'],
+            'mobile-reminder-countdown': ['mobile-reminder-countdown'],
+            'install-button-label': ['install-button-label']
         };
 
         for (const candidate of [id, ...(aliases[id] || [])]) {
@@ -1070,6 +1186,10 @@ class IslamTimes {
 
     _isIos() {
         return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+
+    _isMobileViewport() {
+        return window.matchMedia?.('(max-width: 768px)').matches ?? window.innerWidth <= 768;
     }
 }
 
