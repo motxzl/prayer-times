@@ -115,6 +115,10 @@ class IslamTimes {
         this.init();
     }
 
+    _isAndroidApp() {
+        return typeof window.AndroidApp !== 'undefined' || /PrayerTimesAndroidApp/i.test(navigator.userAgent || '');
+    }
+
     // ─────────────────────────────────────────────
     // INIT
     // ─────────────────────────────────────────────
@@ -125,7 +129,7 @@ class IslamTimes {
         this._startClock();
         this._startEventCountdowns();
 
-        if ('serviceWorker' in navigator) {
+        if (!this._isAndroidApp() && 'serviceWorker' in navigator) {
             navigator.serviceWorker.ready
                 .then(reg => {
                     this._swRegistration = reg;
@@ -886,7 +890,7 @@ class IslamTimes {
     // ─────────────────────────────────────────────
     _showInstallBtn() {
         const btn = this._getEl('install-btn');
-        if (!btn || this._isStandalone()) return;
+        if (!btn || this._isStandalone() || this._isAndroidApp()) return;
         this._updateInstallButtonLabel();
         btn.classList.remove('hidden');
         btn.classList.add('flex');
@@ -902,7 +906,7 @@ class IslamTimes {
     }
 
     _syncInstallButtonVisibility() {
-        if (this._isStandalone()) {
+        if (this._isStandalone() || this._isAndroidApp()) {
             this._hideInstallBtn();
             return;
         }
@@ -917,6 +921,12 @@ class IslamTimes {
     }
 
     async _installApp() {
+        if (this._isAndroidApp()) {
+            this._showToast('This APK is already installed on your phone.');
+            this._hideInstallBtn();
+            return;
+        }
+
         if (this._isStandalone()) {
             this._showToast('The app is already installed.');
             this._hideInstallBtn();
@@ -1218,6 +1228,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // ─── Service Worker registration ──────────────────────────────────────
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
+        const isAndroidApp = typeof window.AndroidApp !== 'undefined' || /PrayerTimesAndroidApp/i.test(navigator.userAgent || '');
+        if (isAndroidApp) return;
+
         navigator.serviceWorker.register('sw.js')
             .then(r => console.log('SW registered:', r.scope))
             .catch(e => console.log('SW error:', e));

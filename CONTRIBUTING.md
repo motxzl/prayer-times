@@ -5,7 +5,7 @@ Thank you for your interest in contributing to PrayerTimes! We welcome contribut
 ## Getting Started
 
 1. **Fork the repository** - Click the fork button on GitHub
-2. **Clone your fork** - `git clone https://github.com/YOUR_USERNAME/prayer-times.git`
+2. **Clone your fork** - `git clone https://github.com/motxzl/prayer-times.git`
 3. **Create a branch** - `git checkout -b feature/your-feature-name`
 4. **Make your changes** - Edit files and test locally
 5. **Commit your changes** - `git commit -m "Add your feature description"`
@@ -22,15 +22,8 @@ Thank you for your interest in contributing to PrayerTimes! We welcome contribut
 ### Running Locally
 1. Open the project folder
 2. Use Live Server extension (right-click `index.html` → Open with Live Server)
-3. Or use any local server: `python -m http.server 8000 --bind 0.0.0.0`
-4. Navigate to `http://localhost:8000`
-
-### Testing on Mobile (Same Wi-Fi)
-1. Start the server with LAN binding: `python -m http.server 8000 --bind 0.0.0.0`
-2. Find your computer LAN IP (example: `192.168.1.25`)
-3. Open from phone: `http://YOUR_LAN_IP:8000` (example: `http://192.168.1.25:8000`)
-4. Make sure desktop + phone are on the same network and firewall allows port `8000`
-5. Note: `localhost` on mobile points to the phone itself, not your computer
+3. Or use any local server: `python -m http.server 8000`
+4. Navigate to `http://localhost:5500`
 
 ## Code Standards
 
@@ -43,8 +36,6 @@ Thank you for your interest in contributing to PrayerTimes! We welcome contribut
 - Use Tailwind CSS utility classes
 - Follow the existing color scheme (Islamic Green: #059669)
 - Keep custom CSS to a minimum
-- Every UI addition or style change must support both dark mode and light mode before merge
-- Verify readability, borders, backgrounds, and focus states in both themes
 
 ### JavaScript
 - Use modern ES6+ syntax
@@ -84,7 +75,6 @@ Before submitting a PR:
 3. Test offline functionality (Service Worker)
 4. Check PWA installation works
 5. Verify all prayer times calculations
-6. Toggle dark/light theme and confirm changed UI works in both
 
 ## Pull Request Guidelines
 
