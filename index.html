@@ -1,29 +1,776 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My First Website</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <h1>Hello World! 🌍</h1>
-    <p>This is my very first website. I'm 17 and just started learning!</p>
-   
-    <h2>About Me</h2>
-    <p>I like [put something you like here, like gaming, music, football, etc.]</p>
+    <meta name="title" content="PrayerTimes - Islamic Prayer Times">
+    <meta name="description" content="Beautiful Islamic prayer times app with automatic location detection and elegant design">
+    <meta name="theme-color" content="#059669">
+    <meta name="author" content="motxzl">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="PrayerTimes">
+    <meta property="og:title" content="PrayerTimes - Islamic Prayer Times">
+    <meta property="og:description" content="Beautiful Islamic prayer times app with automatic location detection and elegant design">
+    <meta property="og:url" content="https://github.com/motxzl/prayer-times">
+    <meta property="og:type" content="website">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icons/app-icon.svg">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
 
-    <button onclick="sayHi()">Click me!</button>
-<button onclick="cal()">اجمع 2+2</button>
+    <!-- Google Fonts for Arabic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Custom Tailwind Config -->
     <script>
-        function sayHi() {
-            alert("Hi! Thanks for visiting my website 😊");
-        }
-        function cal() {
-            alert("جمع 2 + 2 = " + (2 + 2));
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        islamic: {
+                            green: '#059669',
+                            dark: '#0c0a09',
+                            light: '#f8fafc'
+                        }
+                    },
+                    fontFamily: {
+                        'arabic': ['Amiri', 'serif'],
+                        'sans': ['Inter', 'system-ui', 'sans-serif']
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'fade-in': 'fadeIn 0.6s ease-in-out',
+                        'slide-up': 'slideUp 0.5s ease-out'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        }
+                    }
+                }
+            }
         }
     </script>
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark bg-gradient-to-br from-islamic-dark via-slate-900 to-islamic-dark min-h-screen pb-24 text-white font-sans transition-all duration-500">
+    <!-- Loading Screen -->
+    <div id="loading" class="fixed inset-0 bg-gradient-to-br from-islamic-dark via-slate-900 to-islamic-dark flex items-center justify-center z-50">
+        <div class="text-center animate-fade-in">
+            <div class="relative mb-6">
+                <div class="animate-spin rounded-full h-20 w-20 border-4 border-islamic-green/20 border-t-islamic-green mx-auto"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-emerald-400/60 animate-pulse-slow"></div>
+            </div>
+            <div class="animate-slide-up">
+                <i class="fas fa-mosque text-4xl text-islamic-green mb-4"></i>
+                <p class="text-islamic-green text-xl font-semibold font-arabic">Loading Prayer Times...</p>
+                <p class="text-slate-400 text-sm mt-2">جاري تحميل أوقات الصلاة</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="home-page">
+    <!-- Main Container -->
+    <div class="container mx-auto max-w-4xl px-4 py-8 opacity-0 transition-opacity duration-500" id="main-content">
+        <!-- Header -->
+        <header id="home-section" class="scroll-mt-24 text-center mb-8 animate-fade-in">
+            <div class="hero-brand flex flex-col items-center justify-center gap-4 mb-6 sm:flex-row sm:gap-0">
+                <div class="logo-mark relative flex h-20 w-20 items-center justify-center rounded-[28px] border border-emerald-400/20 bg-white/5 shadow-2xl shadow-emerald-950/20 backdrop-blur-xl">
+                    <img src="icons/app-icon.svg" alt="PrayerTimes logo" class="app-logo-image h-12 w-12 object-contain">
+                    <div class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
+                </div>
+                <div class="hero-brand-copy text-center sm:ml-4 sm:text-left">
+                    <h1 class="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-islamic-green via-emerald-400 to-teal-400 bg-clip-text text-transparent font-arabic leading-tight">
+                        PrayerTimes
+                    </h1>
+                    <p class="text-slate-300 text-base sm:text-lg md:text-xl font-arabic">أوقات الصلاة</p>
+                </div>
+            </div>
+            <p class="text-slate-400 text-lg mb-6 font-arabic">Islamic Prayer Times</p>
+
+            <!-- Date Display -->
+            <div class="bg-white/5 backdrop-blur-xl rounded-3xl p-6 mb-6 border border-white/10 shadow-2xl">
+                <div class="flex flex-col md:flex-row items-center justify-between">
+                    <div class="text-center md:text-left mb-4 md:mb-0">
+                        <p class="text-sm text-slate-400 mb-1">Gregorian Date</p>
+                        <p class="text-lg font-semibold text-islamic-green font-arabic" id="gregorian-date">Loading date...</p>
+                        <p class="text-sm text-slate-400 mt-2">Hijri Date</p>
+                        <p class="text-xl font-bold text-emerald-300 font-arabic" id="hijri-date">Loading Hijri date...</p>
+                    </div>
+                    <div class="text-center md:text-right">
+                        <p class="text-sm text-slate-400 mb-1">Current Time</p>
+                        <p class="text-3xl md:text-4xl font-mono font-bold text-white" id="current-time">--:--</p>
+                        <div class="flex items-center justify-center mt-2">
+                            <i class="fas fa-clock text-islamic-green mr-2"></i>
+                            <span class="text-xs text-slate-400">Live</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Location Selector -->
+        <div class="bg-white/5 backdrop-blur-xl rounded-3xl p-6 mb-6 border border-white/10 shadow-2xl animate-fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold flex items-center font-arabic">
+                    <i class="fas fa-map-marker-alt text-islamic-green mr-3 text-2xl"></i>
+                    Location Settings
+                </h2>
+                <button id="location-toggle" class="text-sm bg-islamic-green/20 hover:bg-islamic-green/30 px-4 py-2 rounded-xl transition-all duration-300 hover:scale-105 border border-islamic-green/30">
+                    <i class="fas fa-cog mr-2"></i>Configure
+                </button>
+            </div>
+
+            <div id="location-display" class="text-center">
+                <p class="text-slate-300 mb-2 font-arabic">Current Location</p>
+                <p class="text-xl font-bold text-islamic-green font-arabic" id="current-location">Loading...</p>
+                <button id="retry-button" class="mt-3 text-sm bg-red-500/20 hover:bg-red-500/30 text-red-300 px-4 py-2 rounded-xl transition-all duration-300 hover:scale-105 border border-red-500/30 hidden">
+                    <i class="fas fa-redo mr-2"></i>Retry Detection
+                </button>
+            </div>
+
+            <!-- Location Settings (Hidden by default) -->
+            <div id="location-settings" class="hidden mt-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Country</label>
+                    <select id="country-input" class="w-full bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-islamic-green">
+                        <option value="">Select a country...</option>
+                        <option value="Afghanistan">Afghanistan</option>
+                        <option value="Albania">Albania</option>
+                        <option value="Algeria">Algeria</option>
+                        <option value="Argentina">Argentina</option>
+                        <option value="Australia">Australia</option>
+                        <option value="Austria">Austria</option>
+                        <option value="Bahrain">Bahrain</option>
+                        <option value="Bangladesh">Bangladesh</option>
+                        <option value="Belgium">Belgium</option>
+                        <option value="Brazil">Brazil</option>
+                        <option value="Bulgaria">Bulgaria</option>
+                        <option value="Canada">Canada</option>
+                        <option value="Chile">Chile</option>
+                        <option value="China">China</option>
+                        <option value="Colombia">Colombia</option>
+                        <option value="Croatia">Croatia</option>
+                        <option value="Czech Republic">Czech Republic</option>
+                        <option value="Denmark">Denmark</option>
+                        <option value="Egypt">Egypt</option>
+                        <option value="Finland">Finland</option>
+                        <option value="France">France</option>
+                        <option value="Germany">Germany</option>
+                        <option value="Greece">Greece</option>
+                        <option value="Hungary">Hungary</option>
+                        <option value="Iceland">Iceland</option>
+                        <option value="India">India</option>
+                        <option value="Indonesia">Indonesia</option>
+                        <option value="Iran">Iran</option>
+                        <option value="Iraq">Iraq</option>
+                        <option value="Ireland">Ireland</option>
+                        <option value="Italy">Italy</option>
+                        <option value="Japan">Japan</option>
+                        <option value="Jordan">Jordan</option>
+                        <option value="Kazakhstan">Kazakhstan</option>
+                        <option value="Kenya">Kenya</option>
+                        <option value="Kuwait">Kuwait</option>
+                        <option value="Kyrgyzstan">Kyrgyzstan</option>
+                        <option value="Lebanon">Lebanon</option>
+                        <option value="Libya">Libya</option>
+                        <option value="Malaysia">Malaysia</option>
+                        <option value="Maldives">Maldives</option>
+                        <option value="Mexico">Mexico</option>
+                        <option value="Morocco">Morocco</option>
+                        <option value="Netherlands">Netherlands</option>
+                        <option value="New Zealand">New Zealand</option>
+                        <option value="Norway">Norway</option>
+                        <option value="Oman">Oman</option>
+                        <option value="Pakistan">Pakistan</option>
+                        <option value="Palestine">Palestine</option>
+                        <option value="Peru">Peru</option>
+                        <option value="Philippines">Philippines</option>
+                        <option value="Poland">Poland</option>
+                        <option value="Portugal">Portugal</option>
+                        <option value="Qatar">Qatar</option>
+                        <option value="Romania">Romania</option>
+                        <option value="Russia">Russia</option>
+                        <option value="Saudi Arabia">Saudi Arabia</option>
+                        <option value="Singapore">Singapore</option>
+                        <option value="South Africa">South Africa</option>
+                        <option value="South Korea">South Korea</option>
+                        <option value="Spain">Spain</option>
+                        <option value="Sri Lanka">Sri Lanka</option>
+                        <option value="Sudan">Sudan</option>
+                        <option value="Sweden">Sweden</option>
+                        <option value="Switzerland">Switzerland</option>
+                        <option value="Syria">Syria</option>
+                        <option value="Taiwan">Taiwan</option>
+                        <option value="Tajikistan">Tajikistan</option>
+                        <option value="Thailand">Thailand</option>
+                        <option value="Tunisia">Tunisia</option>
+                        <option value="Turkey">Turkey</option>
+                        <option value="Turkmenistan">Turkmenistan</option>
+                        <option value="UAE">UAE</option>
+                        <option value="United Arab Emirates">United Arab Emirates</option>
+                        <option value="United Kingdom">United Kingdom</option>
+                        <option value="United States">United States</option>
+                        <option value="Uzbekistan">Uzbekistan</option>
+                        <option value="Vietnam">Vietnam</option>
+                        <option value="Yemen">Yemen</option>
+                        <option value="Zimbabwe">Zimbabwe</option>
+                    </select>
+                    <p id="country-recommendation" class="mt-2 text-xs text-slate-400">Recommended countries: Egypt, Saudi Arabia, Turkey, Indonesia, Pakistan.</p>
+                </div>
+<div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
+                    <div id="city-list-container" class="relative">
+                        <input type="text" id="city-input" placeholder="Select a country first to choose a city" class="w-full bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-islamic-green" list="city-suggestions" disabled>
+                        <datalist id="city-suggestions"></datalist>
+                        <ul id="city-suggestion-list" class="hidden absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900/95 shadow-xl text-left"></ul>
+                    </div>
+                    <p id="city-recommendations" class="mt-2 text-xs text-slate-400">Choose a country first to see city recommendations.</p>
+                </div>
+
+                <div class="flex gap-3">
+                    <button id="detect-location" class="flex-1 bg-gradient-to-r from-islamic-green to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-white py-3 px-6 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl border border-islamic-green/50">
+                        <i class="fas fa-crosshairs mr-2"></i>Detect Location
+                    </button>
+                    <button id="manual-location" class="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-white py-3 px-6 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl border border-slate-600/50">
+                        <i class="fas fa-search mr-2"></i>Search City
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Next Prayer Countdown -->
+        <div id="countdown-section" class="scroll-mt-24 bg-gradient-to-r from-islamic-green/10 via-emerald-600/10 to-teal-500/10 backdrop-blur-xl rounded-3xl p-8 mb-8 border border-islamic-green/20 shadow-2xl animate-fade-in">
+            <div class="text-center">
+                <div class="flex items-center justify-center mb-4">
+                    <i class="fas fa-clock text-islamic-green text-2xl mr-3"></i>
+                    <h3 class="text-2xl font-bold font-arabic">Next Prayer</h3>
+                </div>
+                <p class="text-3xl md:text-4xl font-bold text-islamic-green mb-4 font-arabic" id="next-prayer-name">Loading...</p>
+                <p class="text-5xl md:text-7xl font-mono font-bold mb-6 text-white drop-shadow-lg" id="countdown">00:00:00</p>
+                <div class="flex items-center justify-center">
+                    <i class="fas fa-calendar-alt text-slate-400 mr-2"></i>
+                    <p class="text-slate-300 text-lg font-arabic" id="next-prayer-time">Time loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prayer Times Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Fajr -->
+            <div class="prayer-card bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-2xl transition-all duration-500 hover:bg-white/10 hover:scale-105 hover:shadow-3xl animate-fade-in" data-prayer="Fajr">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-gradient-to-br from-indigo-500/20 to-purple-600/20 rounded-2xl flex items-center justify-center mr-4 border border-indigo-400/30">
+                            <i class="fas fa-moon text-indigo-400 text-2xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xl font-bold font-arabic text-white">Fajr</span>
+                            <p class="text-xs text-slate-400 font-arabic">الفجر</p>
+                        </div>
+                    </div>
+                    <span class="text-lg font-mono font-bold text-slate-300" id="fajr-time">--:--</span>
+                </div>
+                <p class="text-sm text-slate-400 font-arabic">Dawn Prayer - صلاة الفجر</p>
+            </div>
+
+            <!-- Sunrise -->
+            <div class="prayer-card bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-2xl transition-all duration-500 hover:bg-white/10 hover:scale-105 hover:shadow-3xl animate-fade-in" data-prayer="Sunrise">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-2xl flex items-center justify-center mr-4 border border-yellow-400/30">
+                            <i class="fas fa-sun text-yellow-400 text-2xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xl font-bold font-arabic text-white">Sunrise</span>
+                            <p class="text-xs text-slate-400 font-arabic">الشروق</p>
+                        </div>
+                    </div>
+                    <span class="text-lg font-mono font-bold text-slate-300" id="sunrise-time">--:--</span>
+                </div>
+                <p class="text-sm text-slate-400 font-arabic">Sunrise Time - وقت الشروق</p>
+            </div>
+
+            <!-- Dhuhr -->
+            <div class="prayer-card bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-2xl transition-all duration-500 hover:bg-white/10 hover:scale-105 hover:shadow-3xl animate-fade-in" data-prayer="Dhuhr">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-2xl flex items-center justify-center mr-4 border border-orange-400/30">
+                            <i class="fas fa-sun text-orange-400 text-2xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xl font-bold font-arabic text-white">Dhuhr</span>
+                            <p class="text-xs text-slate-400 font-arabic">الظهر</p>
+                        </div>
+                    </div>
+                    <span class="text-lg font-mono font-bold text-slate-300" id="dhuhr-time">--:--</span>
+                </div>
+                <p class="text-sm text-slate-400 font-arabic">Noon Prayer - صلاة الظهر</p>
+            </div>
+
+            <!-- Asr -->
+            <div class="prayer-card bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-2xl transition-all duration-500 hover:bg-white/10 hover:scale-105 hover:shadow-3xl animate-fade-in" data-prayer="Asr">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-2xl flex items-center justify-center mr-4 border border-blue-400/30">
+                            <i class="fas fa-cloud-sun text-blue-400 text-2xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xl font-bold font-arabic text-white">Asr</span>
+                            <p class="text-xs text-slate-400 font-arabic">العصر</p>
+                        </div>
+                    </div>
+                    <span class="text-lg font-mono font-bold text-slate-300" id="asr-time">--:--</span>
+                </div>
+                <p class="text-sm text-slate-400 font-arabic">Afternoon Prayer - صلاة العصر</p>
+            </div>
+
+            <!-- Maghrib -->
+            <div class="prayer-card bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-2xl transition-all duration-500 hover:bg-white/10 hover:scale-105 hover:shadow-3xl animate-fade-in" data-prayer="Maghrib">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-gradient-to-br from-red-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center mr-4 border border-red-400/30">
+                            <svg class="w-7 h-7 text-red-300" viewBox="0 0 48 48" fill="none" aria-label="Maghrib logo" role="img">
+                                <circle cx="24" cy="20" r="8" fill="currentColor" opacity="0.95"></circle>
+                                <path d="M8 30H40" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+                                <path d="M15 35C17.5 31.5 21 30 24 30C27 30 30.5 31.5 33 35" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <span class="text-xl font-bold font-arabic text-white">Maghrib</span>
+                            <p class="text-xs text-slate-400 font-arabic">المغرب</p>
+                        </div>
+                    </div>
+                    <span class="text-lg font-mono font-bold text-slate-300" id="maghrib-time">--:--</span>
+                </div>
+                <p class="text-sm text-slate-400 font-arabic">Sunset Prayer - صلاة المغرب</p>
+            </div>
+
+            <!-- Isha -->
+            <div class="prayer-card bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-2xl transition-all duration-500 hover:bg-white/10 hover:scale-105 hover:shadow-3xl animate-fade-in" data-prayer="Isha">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-gradient-to-br from-indigo-500/20 to-blue-600/20 rounded-2xl flex items-center justify-center mr-4 border border-indigo-400/30">
+                            <i class="fas fa-star text-indigo-400 text-2xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xl font-bold font-arabic text-white">Isha</span>
+                            <p class="text-xs text-slate-400 font-arabic">العشاء</p>
+                        </div>
+                    </div>
+                    <span class="text-lg font-mono font-bold text-slate-300" id="isha-time">--:--</span>
+                </div>
+                <p class="text-sm text-slate-400 font-arabic">Night Prayer - صلاة العشاء</p>
+            </div>
+        </div>
+
+        <!-- Additional Times -->
+        <div class="bg-white/5 backdrop-blur-xl rounded-3xl p-6 mb-6 border border-white/10 shadow-2xl animate-fade-in">
+            <h3 class="text-xl font-semibold mb-6 flex items-center font-arabic">
+                <i class="fas fa-clock text-islamic-green mr-3 text-2xl"></i>
+                Additional Times - الأوقات الإضافية
+            </h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div class="text-center p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                    <p class="text-sm text-slate-400 mb-1 font-arabic">Imsak</p>
+                    <p class="text-xl font-bold font-arabic" id="imsak-time">--:--</p>
+                    <p class="text-xs text-slate-500 font-arabic">الإمساك</p>
+                </div>
+                <div class="text-center p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                    <p class="text-sm text-slate-400 mb-1 font-arabic">Midnight</p>
+                    <p class="text-xl font-bold font-arabic" id="midnight-time">--:--</p>
+                    <p class="text-xs text-slate-500 font-arabic">منتصف الليل</p>
+                </div>
+                <div class="text-center p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                    <p class="text-sm text-slate-400 mb-1 font-arabic">First Third</p>
+                    <p class="text-xl font-bold font-arabic" id="firstthird-time">--:--</p>
+                    <p class="text-xs text-slate-500 font-arabic">الثلث الأول</p>
+                </div>
+                <div class="text-center p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                    <p class="text-sm text-slate-400 mb-1 font-arabic">Last Third</p>
+                    <p class="text-xl font-bold font-arabic" id="lastthird-time">--:--</p>
+                    <p class="text-xs text-slate-500 font-arabic">الثلث الأخير</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts -->
+        <section id="notifications-section" class="scroll-mt-24 bg-white/5 backdrop-blur-xl rounded-3xl p-6 mb-6 border border-white/10 shadow-2xl animate-fade-in">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-xl font-semibold mb-2 flex items-center font-arabic">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="mr-3 h-5 w-5 text-islamic-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 18.75a2.25 2.25 0 0 1-4.5 0m8.25-2.25H6.75c-.62 0-.98-.7-.62-1.2l1.17-1.65c.3-.42.45-.93.45-1.44V10.5a4.25 4.25 0 1 1 8.5 0v1.71c0 .51.16 1.02.45 1.44l1.17 1.65c.36.5 0 1.2-.62 1.2Z"></path>
+                        </svg>
+                        Alerts - التنبيهات
+                    </h3>
+                    <p class="text-sm text-slate-400">Manage prayer reminders and browser notification access.</p>
+                </div>
+                <span id="alerts-status-pill" class="inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">Off</span>
+            </div>
+
+            <div id="notif-row" class="mt-5 flex cursor-pointer items-center justify-between rounded-2xl border border-white/10 bg-slate-800/30 px-4 py-4 transition-all duration-150 hover:bg-slate-800/45 active:scale-[0.99]" role="button" tabindex="0" aria-label="Toggle prayer alerts">
+                <div>
+                    <p class="text-sm font-medium text-white">Prayer Alerts</p>
+                    <p id="notif-description" class="mt-1 text-xs text-slate-400">Receive reminders 10 minutes before upcoming prayers.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="notif-lbl" class="text-sm font-medium text-slate-300">Off</span>
+                    <div id="notif-track" class="relative h-7 w-12 rounded-full bg-slate-700 transition-all duration-150 after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:duration-150 after:content-[''] data-[on=true]:bg-emerald-500 data-[on=true]:after:left-6"></div>
+                </div>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-white/10 bg-slate-900/30 p-4">
+                <label for="notification-offset" class="block text-sm text-slate-300">Reminder Time</label>
+                <p class="mt-1 text-xs text-slate-400">Choose how many minutes before the next prayer the alert should appear.</p>
+                <select id="notification-offset" class="mt-3 w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-islamic-green focus:border-transparent transition-all duration-300">
+                    <option value="10">10 minutes before</option>
+                    <option value="15">15 minutes before</option>
+                    <option value="20">20 minutes before</option>
+                    <option value="25">25 minutes before</option>
+                </select>
+            </div>
+
+            <div id="mobile-reminder-card" class="mt-4 rounded-2xl border border-emerald-400/20 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-slate-900/30 p-4 md:hidden">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Next Reminder</p>
+                        <p id="mobile-reminder-name" class="mt-2 text-lg font-semibold text-white">Loading...</p>
+                        <p id="mobile-reminder-detail" class="mt-1 text-xs text-slate-300">Checking the next pre-prayer reminder.</p>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-right shadow-lg">
+                        <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Starts In</p>
+                        <p id="mobile-reminder-countdown" class="mt-1 text-2xl font-mono font-bold text-white">--:--:--</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="notif-sound-row" class="mt-4 flex cursor-pointer items-center justify-between rounded-2xl border border-white/10 bg-slate-800/30 px-4 py-4 transition-all duration-150 hover:bg-slate-800/45 active:scale-[0.99]" role="button" tabindex="0" aria-label="Toggle notification sound">
+                <div>
+                    <p class="text-sm font-medium text-white">Notification Sound</p>
+                    <p id="notif-sound-description" class="mt-1 text-xs text-slate-400">Play a short sound when a prayer reminder appears.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="notif-sound-lbl" class="text-sm font-medium text-slate-300">On</span>
+                    <div id="notif-sound-track" class="relative h-7 w-12 rounded-full bg-slate-700 transition-all duration-150 after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:duration-150 after:content-[''] data-[on=true]:bg-emerald-500 data-[on=true]:after:left-6"></div>
+                </div>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-white/10 bg-slate-900/30 p-4">
+                <p class="text-sm text-slate-300">Permission</p>
+                <p id="alerts-permission" class="mt-1 text-xs text-slate-400">Checking browser notification permission...</p>
+            </div>
+        </section>
+
+        <!-- Settings -->
+        <div id="settings-section" class="scroll-mt-24 bg-white/5 backdrop-blur-xl rounded-3xl p-6 mb-6 border border-white/10 shadow-2xl animate-fade-in">
+            <h3 class="text-xl font-semibold mb-6 flex items-center font-arabic">
+                <i class="fas fa-cog text-islamic-green mr-3 text-2xl"></i>
+                Settings - الإعدادات
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Time Format -->
+                <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                    <label class="block text-sm font-medium text-slate-300 mb-3 font-arabic">Time Format - تنسيق الوقت</label>
+                    <select id="time-format" class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-islamic-green focus:border-transparent transition-all duration-300">
+                        <option value="24">24 Hour - 24 ساعة</option>
+                        <option value="12">12 Hour - 12 ساعة</option>
+                    </select>
+                </div>
+
+                <!-- Calculation Method -->
+                <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                    <label class="block text-sm font-medium text-slate-300 mb-3 font-arabic">Calculation Method - طريقة الحساب</label>
+                    <select id="calculation-method" class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-islamic-green focus:border-transparent transition-all duration-300">
+                        <option value="5">Egyptian General Authority - الهيئة المصرية</option>
+                    </select>
+                </div>
+
+                <!-- Theme Toggle -->
+                <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                    <label class="block text-sm font-medium text-slate-300 mb-3 font-arabic">Theme - المظهر</label>
+                    <button id="theme-toggle" class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white hover:bg-slate-600/50 transition-all duration-300 hover:scale-105 flex items-center justify-center shadow-lg">
+                        <i class="fas fa-moon mr-3 text-xl"></i>
+                        <span class="font-arabic">Dark Mode - الوضع المظلم</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigating Pages - Islamic Events Countdowns -->
+        <div class="bg-white/5 backdrop-blur-xl rounded-3xl p-6 mb-8 border border-white/10 shadow-2xl animate-fade-in">
+            <h3 class="text-xl font-semibold mb-6 flex items-center font-arabic">
+                <i class="fas fa-route text-islamic-green mr-3 text-2xl"></i>
+                Navigating Pages - التنقل بين المناسبات
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-gradient-to-br from-emerald-500/15 to-teal-500/10 border border-emerald-400/30 rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-lg font-bold text-emerald-300 font-arabic">Ramadan</h4>
+                        <i class="fas fa-moon text-emerald-300 text-xl"></i>
+                    </div>
+                    <p class="text-sm text-slate-300 mb-1">Start Date</p>
+                    <p class="text-sm text-slate-100 mb-3" id="ramadan-date">Calculating...</p>
+                    <p class="text-xs text-slate-400 mb-1">Countdown</p>
+                    <p class="text-2xl font-bold text-white font-mono" id="ramadan-countdown">--</p>
+                </div>
+                <div class="bg-gradient-to-br from-amber-500/15 to-orange-500/10 border border-amber-400/30 rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-lg font-bold text-amber-300 font-arabic">Eid Al-Fitr</h4>
+                        <i class="fas fa-star-and-crescent text-amber-300 text-xl"></i>
+                    </div>
+                    <p class="text-sm text-slate-300 mb-1">Date</p>
+                    <p class="text-sm text-slate-100 mb-3" id="eid-fitr-date">Calculating...</p>
+                    <p class="text-xs text-slate-400 mb-1">Countdown</p>
+                    <p class="text-2xl font-bold text-white font-mono" id="eid-fitr-countdown">--</p>
+                </div>
+                <div class="bg-gradient-to-br from-rose-500/15 to-red-500/10 border border-rose-400/30 rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-lg font-bold text-rose-300 font-arabic">Eid Al-Adha</h4>
+                        <i class="fas fa-kaaba text-rose-300 text-xl"></i>
+                    </div>
+                    <p class="text-sm text-slate-300 mb-1">Date</p>
+                    <p class="text-sm text-slate-100 mb-3" id="eid-adha-date">Calculating...</p>
+                    <p class="text-xs text-slate-400 mb-1">Countdown</p>
+                    <p class="text-2xl font-bold text-white font-mono" id="eid-adha-countdown">--</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center text-slate-400 text-sm animate-fade-in">
+            <p class="mb-4 font-arabic">Made with ❤️ for the Ummah - صنع بحب للأمة</p>
+            <div class="flex flex-col md:flex-row items-center justify-center gap-4 mb-4">
+                <a href="https://github.com/motxzl/prayer-times#" class="text-islamic-green hover:text-emerald-400 transition-all duration-300 hover:scale-105 flex items-center px-4 py-2 bg-white/5 rounded-xl border border-white/10">
+                    <i class="fab fa-github mr-2"></i>View on GitHub
+                </a>
+                <div class="text-center">
+                    <p class="text-xs">Made in 🇪🇬 BY Mohamed</p>
+                    <p class="text-xs mt-1">Data provided by Aladhan API</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+    </div>
+
+    <!-- Install App Button -->
+    <button id="install-button" class="install-cta fixed right-4 top-4 z-50 hidden items-center gap-3 rounded-2xl border border-islamic-green/50 bg-gradient-to-r from-islamic-green to-emerald-600 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur-xl transition-all duration-300 sm:right-6 sm:top-6 sm:px-6 sm:text-base">
+        <i class="fas fa-mobile-alt text-xl"></i>
+        <span id="install-button-label" class="font-arabic">Install App - تثبيت التطبيق</span>
+    </button>
+
+    <!-- Bottom Navigation -->
+    <nav aria-label="Bottom navigation" class="fixed inset-x-0 bottom-0 z-50 px-3 pb-3 pt-2 sm:px-4" style="padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);">
+        <div id="bottom-nav-shell" class="mx-auto flex h-[60px] max-w-md items-center justify-between rounded-[22px] border border-white/10 bg-slate-950/75 px-2 shadow-[0_10px_30px_rgba(2,6,23,0.35)] backdrop-blur-xl supports-[backdrop-filter]:bg-slate-950/60 dark:border-white/10 dark:bg-slate-950/75">
+            <button type="button" class="nav-tab group relative flex h-12 min-w-0 flex-1 select-none touch-manipulation items-center justify-center rounded-2xl px-1 text-slate-400 transition-all duration-150 hover:text-white active:scale-95" data-page="home" data-target="home-section" aria-label="Go to Home section" aria-current="page">
+                <span class="pointer-events-none absolute inset-x-3 bottom-1 h-0.5 rounded-full bg-emerald-400 opacity-100 transition-all duration-150"></span>
+                <span class="pointer-events-none absolute inset-x-2 inset-y-1 rounded-2xl bg-emerald-400/12 opacity-100 blur-md transition-all duration-150"></span>
+                <span class="relative flex flex-col items-center justify-center gap-0.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 9 8.25-6 8.25 6v9.75a1.5 1.5 0 0 1-1.5 1.5h-3.75v-6h-6v6H5.25a1.5 1.5 0 0 1-1.5-1.5V9Z"></path>
+                    </svg>
+                    <span class="text-[11px] font-medium leading-none">Home</span>
+                </span>
+            </button>
+
+            <button type="button" class="nav-tab group relative flex h-12 min-w-0 flex-1 select-none touch-manipulation items-center justify-center rounded-2xl px-1 text-slate-400 transition-all duration-150 hover:text-white active:scale-95" data-page="countdown" data-target="countdown-section" aria-label="Go to Countdown section">
+                <span class="pointer-events-none absolute inset-x-3 bottom-1 h-0.5 rounded-full bg-emerald-400 opacity-0 transition-all duration-150"></span>
+                <span class="pointer-events-none absolute inset-x-2 inset-y-1 rounded-2xl bg-emerald-400/12 opacity-0 blur-md transition-all duration-150"></span>
+                <span class="relative flex flex-col items-center justify-center gap-0.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <circle cx="12" cy="13" r="7.25"></circle>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 13V9.5m0 3.5 2.5 2.5M9 3.75h6"></path>
+                    </svg>
+                    <span class="text-[11px] font-medium leading-none">Countdown</span>
+                </span>
+            </button>
+
+            <button type="button" class="nav-tab group relative flex h-12 min-w-0 flex-1 select-none touch-manipulation items-center justify-center rounded-2xl px-1 text-slate-400 transition-all duration-150 hover:text-white active:scale-95" data-page="notifications" data-target="notifications-section" aria-label="Go to Alerts section">
+                <span class="pointer-events-none absolute inset-x-3 bottom-1 h-0.5 rounded-full bg-emerald-400 opacity-0 transition-all duration-150"></span>
+                <span class="pointer-events-none absolute inset-x-2 inset-y-1 rounded-2xl bg-emerald-400/12 opacity-0 blur-md transition-all duration-150"></span>
+                <span id="alerts-badge" class="absolute right-[28%] top-1.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-slate-950 transition-all duration-150"></span>
+                <span class="relative flex flex-col items-center justify-center gap-0.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 18.75a2.25 2.25 0 0 1-4.5 0m8.25-2.25H6.75c-.62 0-.98-.7-.62-1.2l1.17-1.65c.3-.42.45-.93.45-1.44V10.5a4.25 4.25 0 1 1 8.5 0v1.71c0 .51.16 1.02.45 1.44l1.17 1.65c.36.5 0 1.2-.62 1.2Z"></path>
+                    </svg>
+                    <span class="text-[11px] font-medium leading-none">Alerts</span>
+                </span>
+            </button>
+
+            <button type="button" class="nav-tab group relative flex h-12 min-w-0 flex-1 select-none touch-manipulation items-center justify-center rounded-2xl px-1 text-slate-400 transition-all duration-150 hover:text-white active:scale-95" data-page="settings" data-target="settings-section" aria-label="Go to Settings section">
+                <span class="pointer-events-none absolute inset-x-3 bottom-1 h-0.5 rounded-full bg-emerald-400 opacity-0 transition-all duration-150"></span>
+                <span class="pointer-events-none absolute inset-x-2 inset-y-1 rounded-2xl bg-emerald-400/12 opacity-0 blur-md transition-all duration-150"></span>
+                <span class="relative flex flex-col items-center justify-center gap-0.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 3.83c.94-.52 2.06-.52 3 0l.33.18c.3.17.66.2.99.08l.37-.14c1.05-.4 2.23-.13 3 .7s1.04 2.01.7 3l-.14.37c-.12.33-.09.69.08.99l.18.33c.52.94.52 2.06 0 3l-.18.33c-.17.3-.2.66-.08.99l.14.37c.4 1.05.13 2.23-.7 3s-2.01 1.04-3 .7l-.37-.14a1.3 1.3 0 0 0-.99.08l-.33.18c-.94.52-2.06.52-3 0l-.33-.18a1.3 1.3 0 0 0-.99-.08l-.37.14c-1.05.4-2.23.13-3-.7s-1.04-2.01-.7-3l.14-.37c.12-.33.09-.69-.08-.99l-.18-.33c-.52-.94-.52-2.06 0-3l.18-.33c.17-.3.2-.66.08-.99l-.14-.37c-.4-1.05-.13-2.23.7-3s2.01-1.04 3-.7l.37.14c.33.12.69.09.99-.08l.33-.18Z"></path>
+                        <circle cx="12" cy="12" r="3.25"></circle>
+                    </svg>
+                    <span class="text-[11px] font-medium leading-none">Settings</span>
+                </span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        const navSections = {
+            home: 'home-section',
+            countdown: 'countdown-section',
+            notifications: 'notifications-section',
+            settings: 'settings-section'
+        };
+
+        function setActiveNav(pageName) {
+            document.querySelectorAll('.nav-tab').forEach((tab) => {
+                const isActive = tab.dataset.page === pageName;
+                const underline = tab.children[0];
+                const glow = tab.children[1];
+
+                tab.classList.toggle('text-emerald-300', isActive);
+                tab.classList.toggle('text-slate-400', !isActive);
+                tab.setAttribute('aria-current', isActive ? 'page' : 'false');
+
+                if (underline) underline.classList.toggle('opacity-100', isActive);
+                if (underline) underline.classList.toggle('opacity-0', !isActive);
+                if (glow) glow.classList.toggle('opacity-100', isActive);
+                if (glow) glow.classList.toggle('opacity-0', !isActive);
+            });
+        }
+
+        function updateAlertsBadge() {
+            const badge = document.getElementById('alerts-badge');
+            const label = document.getElementById('notif-lbl');
+            const track = document.getElementById('notif-track');
+            const permission = document.getElementById('alerts-permission');
+            const pill = document.getElementById('alerts-status-pill');
+            const notificationsEnabled = localStorage.getItem('it_notifs') === 'true';
+            const state = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+
+            if (badge) {
+                const shouldShow = !notificationsEnabled || state !== 'granted';
+                badge.classList.toggle('scale-0', !shouldShow);
+                badge.classList.toggle('opacity-0', !shouldShow);
+                badge.classList.toggle('scale-100', shouldShow);
+                badge.classList.toggle('opacity-100', shouldShow);
+            }
+
+            if (label) label.textContent = notificationsEnabled ? 'On' : 'Off';
+            if (track) track.dataset.on = notificationsEnabled ? 'true' : 'false';
+            if (pill) {
+                pill.textContent = notificationsEnabled ? 'On' : 'Off';
+                pill.className = notificationsEnabled
+                    ? 'inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300'
+                    : 'inline-flex items-center rounded-full border border-slate-600/40 bg-slate-800/60 px-3 py-1 text-xs font-medium text-slate-300';
+            }
+
+            if (permission) {
+                if (state === 'granted') permission.textContent = 'Notifications are allowed in this browser.';
+                else if (state === 'denied') permission.textContent = 'Notifications are blocked. Enable them in browser settings.';
+                else if (state === 'default') permission.textContent = 'Notifications are available and will ask for permission when enabled.';
+                else permission.textContent = 'This browser does not support notifications.';
+            }
+        }
+
+        function getScrollTargetTop(section) {
+            const nav = document.querySelector('nav[aria-label="Bottom navigation"]');
+            const navHeight = nav ? nav.offsetHeight : 72;
+            const extraOffset = 20;
+            return Math.max(0, window.scrollY + section.getBoundingClientRect().top - navHeight - extraOffset);
+        }
+
+        function scrollToSection(section) {
+            const top = getScrollTargetTop(section);
+            try {
+                window.scrollTo({ top, behavior: 'smooth' });
+            } catch (_) {
+                window.scrollTo(0, top);
+            }
+        }
+
+        function syncActiveTabFromScroll() {
+            const scrollPosition = window.scrollY + (window.innerHeight * 0.28);
+            let activePage = 'home';
+
+            Object.entries(navSections).forEach(([pageName, id]) => {
+                const section = document.getElementById(id);
+                if (!section) return;
+                if (scrollPosition >= section.offsetTop) activePage = pageName;
+            });
+
+            setActiveNav(activePage);
+        }
+
+        function showPage(pageName) {
+            const targetId = navSections[pageName];
+            const section = targetId ? document.getElementById(targetId) : null;
+            if (!section) return;
+
+            setActiveNav(pageName);
+            scrollToSection(section);
+            if (pageName === 'notifications') updateAlertsBadge();
+        }
+
+        function setupBottomNav() {
+            const navTabs = document.querySelectorAll('.nav-tab');
+
+            navTabs.forEach((tab) => {
+                tab.addEventListener('click', () => showPage(tab.dataset.page));
+                tab.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        showPage(tab.dataset.page);
+                    }
+                });
+            });
+
+            setActiveNav('home');
+            updateAlertsBadge();
+            syncActiveTabFromScroll();
+
+            document.getElementById('notif-row')?.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    document.getElementById('notif-row')?.click();
+                }
+            });
+
+            let scrollTicking = false;
+            window.addEventListener('scroll', () => {
+                if (scrollTicking) return;
+                scrollTicking = true;
+                requestAnimationFrame(() => {
+                    syncActiveTabFromScroll();
+                    scrollTicking = false;
+                });
+            }, { passive: true });
+
+            window.addEventListener('resize', syncActiveTabFromScroll);
+            window.addEventListener('storage', (event) => {
+                if (event.key === 'it_notifs') updateAlertsBadge();
+            });
+        }
+
+        window.showPage = showPage;
+        window.updateAlertsBadge = updateAlertsBadge;
+        window.addEventListener('DOMContentLoaded', setupBottomNav);
+    </script>
+
+    <!-- JavaScript -->
+    <script src="script.js"></script>
 </body>
 </html>
