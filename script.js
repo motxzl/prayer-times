@@ -1,892 +1,1238 @@
-// PrayerTimes - Islamic Prayer Times Application
-// Main JavaScript file
+/**
+ * Islam Times - Islamic Prayer Times App
+ * Full rewrite: reliable loading, live countdown, working Qibla compass,
+ * notifications, PWA install, light/dark mode, share, settings.
+ */
 
-class PrayerTimesApp {
+// ─── Arabic prayer names lookup ───────────────────────────────────────
+const ARABIC = {
+    Fajr: 'الفجر', Sunrise: 'الشروق', Dhuhr: 'الظهر',
+    Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء'
+};
+
+// ─── Main 5 prayers used for next-prayer logic ────────────────────────
+const MAIN_PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+
+// ─── Country → cities mapping (kept compact; add more as needed) ──────
+const CITIES = {
+    'Egypt': ['Cairo','Alexandria','Giza','Port Said','Suez','Luxor','Aswan','Asyut','Ismailia','Zagazig','Tanta','Mansoura','Hurghada','Minya','Damietta'],
+    'Saudi Arabia': ['Mecca','Medina','Riyadh','Jeddah','Dammam','Taif','Khobar','Tabuk','Abha','Najran'],
+    'UAE': ['Dubai','Abu Dhabi','Sharjah','Ajman','Ras Al Khaimah'],
+    'Turkey': ['Istanbul','Ankara','Izmir','Bursa','Adana','Gaziantep','Konya','Antalya'],
+    'Pakistan': ['Karachi','Lahore','Islamabad','Rawalpindi','Faisalabad','Multan','Peshawar','Quetta'],
+    'Bangladesh': ['Dhaka','Chittagong','Khulna','Rajshahi','Sylhet'],
+    'Indonesia': ['Jakarta','Bandung','Surabaya','Medan','Semarang','Makassar'],
+    'Malaysia': ['Kuala Lumpur','George Town','Johor Bahru','Ipoh','Shah Alam'],
+    'India': ['Mumbai','Delhi','Bangalore','Hyderabad','Ahmedabad','Chennai','Kolkata','Lucknow','Patna','Jaipur'],
+    'United States': ['New York','Los Angeles','Chicago','Houston','Detroit','Chicago','Dearborn','Jersey City'],
+    'United Kingdom': ['London','Birmingham','Manchester','Bradford','Leicester'],
+    'Canada': ['Toronto','Montreal','Vancouver','Calgary','Edmonton','Ottawa'],
+    'Australia': ['Sydney','Melbourne','Brisbane','Perth','Adelaide'],
+    'Germany': ['Berlin','Hamburg','Munich','Cologne','Frankfurt'],
+    'France': ['Paris','Marseille','Lyon','Lille','Toulouse'],
+    'Morocco': ['Casablanca','Rabat','Fès','Marrakech','Meknès','Agadir'],
+    'Tunisia': ['Tunis','Sfax','Sousse','Kairouan'],
+    'Algeria': ['Algiers','Oran','Constantine','Annaba'],
+    'Libya': ['Tripoli','Benghazi','Misrata'],
+    'Jordan': ['Amman','Zarqa','Irbid'],
+    'Lebanon': ['Beirut','Tripoli','Sidon'],
+    'Syria': ['Damascus','Aleppo','Homs'],
+    'Iraq': ['Baghdad','Basra','Mosul','Erbil','Najaf','Karbala'],
+    'Iran': ['Tehran','Mashhad','Isfahan','Tabriz','Shiraz'],
+    'Kuwait': ['Kuwait City'],
+    'Qatar': ['Doha'],
+    'Bahrain': ['Manama'],
+    'Oman': ['Muscat','Salalah'],
+    'Yemen': ['Sana\'a','Aden','Taiz'],
+    'Sudan': ['Khartoum','Omdurman'],
+    'Somalia': ['Mogadishu'],
+    'Palestine': ['Gaza','Hebron','Nablus','Ramallah'],
+    'Afghanistan': ['Kabul','Kandahar','Herat','Mazar-i-Sharif'],
+    'Kazakhstan': ['Almaty','Nur-Sultan'],
+    'Uzbekistan': ['Tashkent','Samarkand','Bukhara'],
+    'Russia': ['Moscow','Saint Petersburg','Kazan','Ufa'],
+    'China': ['Urumqi','Beijing','Shanghai'],
+    'Nigeria': ['Lagos','Abuja','Kano','Ibadan'],
+    'South Africa': ['Johannesburg','Cape Town','Durban'],
+    'Kenya': ['Nairobi','Mombasa'],
+    'Netherlands': ['Amsterdam','Rotterdam','The Hague'],
+    'Belgium': ['Brussels','Antwerp'],
+    'Sweden': ['Stockholm','Gothenburg','Malmö'],
+    'Norway': ['Oslo'],
+    'Denmark': ['Copenhagen'],
+    'Switzerland': ['Zurich','Geneva','Basel'],
+    'Austria': ['Vienna'],
+    'Italy': ['Rome','Milan'],
+    'Spain': ['Madrid','Barcelona'],
+    'Greece': ['Athens','Thessaloniki'],
+    'Bosnia and Herzegovina': ['Sarajevo','Banja Luka'],
+    'Albania': ['Tirana'],
+    'Kosovo': ['Pristina'],
+    'North Macedonia': ['Skopje'],
+    'Singapore': ['Singapore'],
+    'Philippines': ['Cotabato','Marawi','Manila'],
+    'Thailand': ['Bangkok','Pattani'],
+    'Japan': ['Tokyo','Osaka'],
+    'New Zealand': ['Auckland','Wellington'],
+    'Brazil': ['São Paulo','Rio de Janeiro'],
+    'Argentina': ['Buenos Aires'],
+};
+
+// ─── App class ────────────────────────────────────────────────────────
+class IslamTimes {
     constructor() {
-        this.apiBase = 'https://api.aladhan.com/v1';
-        this.currentLocation = null;
-        this.prayerTimes = null;
-        this.nextPrayer = null;
-        this.countdownInterval = null;
-        this.currentTimeInterval = null;
-        this.deferredPrompt = null; // For PWA install
-        this.settings = {
-            timeFormat: localStorage.getItem('timeFormat') || '12',
-            calculationMethod: localStorage.getItem('calculationMethod') || '5',
-            theme: localStorage.getItem('theme') || 'light',
-            language: localStorage.getItem('language') || 'en'
+        const savedNotifOffset = parseInt(localStorage.getItem('it_notif_offset') || '10', 10);
+
+        // Settings with localStorage persistence
+        this.s = {
+            timeFormat: localStorage.getItem('it_fmt') || '12',
+            method: localStorage.getItem('it_method') || '5',
+            theme: localStorage.getItem('it_theme') || 'dark',
+            notifs: localStorage.getItem('it_notifs') === 'true',
+            notifOffset: [10, 15, 20, 25].includes(savedNotifOffset) ? savedNotifOffset : 10,
+            notifSound: localStorage.getItem('it_notif_sound') !== 'false'
         };
 
-        // Country to cities mapping
-        this.countryCities = {
-            'Egypt': ['Cairo', 'Alexandria', 'Giza', 'Shubra El-Kheima', 'Port Said', 'Suez', 'Luxor', 'Aswan', 'Asyut', 'Ismailia', 'Zagazig', 'Tanta', 'Mansoura', 'Damanhur', 'Beni Suef', 'Sohag', 'Hurghada', 'Qena', 'Minya', 'Damietta'],
-            'Saudi Arabia': ['Mecca', 'Medina', 'Riyadh', 'Jeddah', 'Dammam', 'Taif', 'Khobar', 'Tabuk', 'Abha', 'Najran'],
-            'United Arab Emirates': ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'],
-            'Turkey': ['Istanbul', 'Ankara', 'Izmir', 'Bursa', 'Adana', 'Gaziantep', 'Konya', 'Antalya', 'Kayseri', 'Mersin'],
-            'Pakistan': ['Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan', 'Peshawar', 'Quetta', 'Sialkot', 'Bahawalpur'],
-            'Bangladesh': ['Dhaka', 'Chittagong', 'Khulna', 'Rajshahi', 'Barisal', 'Sylhet', 'Comilla', 'Narayanganj', 'Gazipur', 'Rangpur'],
-            'Indonesia': ['Jakarta', 'Bandung', 'Surabaya', 'Medan', 'Semarang', 'Makassar', 'Palembang', 'Depok', 'Tangerang', 'South Tangerang'],
-            'Malaysia': ['Kuala Lumpur', 'George Town', 'Johor Bahru', 'Ipoh', 'Shah Alam', 'Petaling Jaya', 'Kuching', 'Kota Kinabalu', 'Seremban', 'Kuantan'],
-            'India': ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Ahmedabad', 'Chennai', 'Kolkata', 'Surat', 'Pune', 'Jaipur', 'Lucknow', 'Kanpur', 'Nagpur', 'Indore', 'Patna', 'Vadodara', 'Ghaziabad', 'Ludhiana', 'Agra', 'Nashik'],
-            'United States': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose'],
-            'United Kingdom': ['London', 'Birmingham', 'Manchester', 'Liverpool', 'Leeds', 'Sheffield', 'Bristol', 'Newcastle', 'Sunderland', 'Brighton'],
-            'Canada': ['Toronto', 'Montreal', 'Vancouver', 'Calgary', 'Edmonton', 'Ottawa', 'Winnipeg', 'Quebec City', 'Hamilton', 'Kitchener'],
-            'Australia': ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Gold Coast', 'Canberra', 'Newcastle', 'Wollongong', 'Logan City'],
-            'Germany': ['Berlin', 'Hamburg', 'Munich', 'Cologne', 'Frankfurt', 'Stuttgart', 'Düsseldorf', 'Dortmund', 'Essen', 'Leipzig'],
-            'France': ['Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes', 'Strasbourg', 'Montpellier', 'Bordeaux', 'Lille'],
-            'Italy': ['Rome', 'Milan', 'Naples', 'Turin', 'Palermo', 'Genoa', 'Bologna', 'Florence', 'Bari', 'Catania'],
-            'Spain': ['Madrid', 'Barcelona', 'Valencia', 'Seville', 'Zaragoza', 'Málaga', 'Murcia', 'Palma', 'Las Palmas', 'Bilbao'],
-            'Netherlands': ['Amsterdam', 'Rotterdam', 'The Hague', 'Utrecht', 'Eindhoven', 'Tilburg', 'Groningen', 'Almere', 'Breda', 'Nijmegen'],
-            'Belgium': ['Brussels', 'Antwerp', 'Ghent', 'Charleroi', 'Liège', 'Bruges', 'Namur', 'Leuven', 'Mons', 'Aalst'],
-            'Switzerland': ['Zurich', 'Geneva', 'Basel', 'Lausanne', 'Bern', 'Winterthur', 'Lucerne', 'St. Gallen', 'Lugano', 'Biel/Bienne'],
-            'Austria': ['Vienna', 'Graz', 'Linz', 'Salzburg', 'Innsbruck', 'Klagenfurt', 'Villach', 'Wels', 'Sankt Pölten', 'Dornbirn'],
-            'Sweden': ['Stockholm', 'Gothenburg', 'Malmö', 'Uppsala', 'Västerås', 'Örebro', 'Linköping', 'Helsingborg', 'Jönköping', 'Norrköping'],
-            'Norway': ['Oslo', 'Bergen', 'Trondheim', 'Stavanger', 'Drammen', 'Fredrikstad', 'Kristiansand', 'Sandnes', 'Tromsø', 'Bodø'],
-            'Denmark': ['Copenhagen', 'Aarhus', 'Odense', 'Aalborg', 'Frederiksberg', 'Esbjerg', 'Randers', 'Kolding', 'Vejle', 'Roskilde'],
-            'Finland': ['Helsinki', 'Espoo', 'Tampere', 'Vantaa', 'Oulu', 'Turku', 'Jyväskylä', 'Lahti', 'Kuopio', 'Kouvola'],
-            'Poland': ['Warsaw', 'Kraków', 'Łódź', 'Wrocław', 'Poznań', 'Gdańsk', 'Szczecin', 'Bydgoszcz', 'Lublin', 'Katowice'],
-            'Czech Republic': ['Prague', 'Brno', 'Ostrava', 'Plzeň', 'Liberec', 'Olomouc', 'Ústí nad Labem', 'České Budějovice', 'Hradec Králové', 'Pardubice'],
-            'Hungary': ['Budapest', 'Debrecen', 'Szeged', 'Miskolc', 'Pécs', 'Győr', 'Nyíregyháza', 'Kecskemét', 'Székesfehérvár', 'Szombathely'],
-            'Greece': ['Athens', 'Thessaloniki', 'Patras', 'Heraklion', 'Larissa', 'Volos', 'Rhodes', 'Ioannina', 'Chania', 'Chalcis'],
-            'Portugal': ['Lisbon', 'Porto', 'Amadora', 'Braga', 'Setúbal', 'Coimbra', 'Queluz', 'Funchal', 'Cacém', 'Vila Nova de Gaia'],
-            'Ireland': ['Dublin', 'Cork', 'Limerick', 'Galway', 'Waterford', 'Drogheda', 'Dundalk', 'Bray', 'Navan', 'Ennis'],
-            'New Zealand': ['Auckland', 'Wellington', 'Christchurch', 'Manurewa', 'Hamilton', 'Tauranga', 'Lower Hutt', 'Dunedin', 'Palmerston North', 'Napier'],
-            'Japan': ['Tokyo', 'Yokohama', 'Osaka', 'Nagoya', 'Sapporo', 'Fukuoka', 'Kawasaki', 'Kobe', 'Saitama', 'Hiroshima'],
-            'South Korea': ['Seoul', 'Busan', 'Incheon', 'Daegu', 'Daejeon', 'Gwangju', 'Suwon', 'Ulsan', 'Changwon', 'Seongnam'],
-            'Singapore': ['Singapore'],
-            'Thailand': ['Bangkok', 'Nonthaburi', 'Nakhon Ratchasima', 'Chiang Mai', 'Hat Yai', 'Pak Kret', 'Si Racha', 'Phra Pradaeng', 'Lampang', 'Khon Kaen'],
-            'Vietnam': ['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Haiphong', 'Biên Hòa', 'Cần Thơ', 'Vinh', 'Thủ Dầu Một', 'Thanh Hóa', 'Nha Trang'],
-            'Philippines': ['Quezon City', 'Manila', 'Caloocan', 'Davao City', 'Cebu City', 'Zamboanga City', 'Taguig', 'Antipolo', 'Pasig', 'Cagayan de Oro'],
-            'South Africa': ['Johannesburg', 'Cape Town', 'Durban', 'Pretoria', 'Port Elizabeth', 'Bloemfontein', 'East London', 'Pietermaritzburg', 'Benoni', 'Tembisa'],
-            'Kenya': ['Nairobi', 'Mombasa', 'Nakuru', 'Eldoret', 'Kisumu', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Kakamega'],
-            'Morocco': ['Casablanca', 'Rabat', 'Fès', 'Marrakech', 'Meknès', 'Oujda', 'Kenitra', 'Agadir', 'Tétouan', 'Safi'],
-            'Tunisia': ['Tunis', 'Sfax', 'Sousse', 'Ettadhamen', 'Kairouan', 'Bizerte', 'Gabès', 'Aryanah', 'Gafsa', 'El Mourouj'],
-            'Algeria': ['Algiers', 'Oran', 'Constantine', 'Annaba', 'Blida', 'Batna', 'Djelfa', 'Sétif', 'Sidi Bel Abbès', 'Biskra'],
-            'Libya': ['Tripoli', 'Benghazi', 'Misrata', 'Tarhuna', 'Al-Khums', 'Zuwarah', 'Sabha', 'Ajdabiya', 'Sirte', 'Al-Bayda'],
-            'Jordan': ['Amman', 'Zarqa', 'Irbid', 'Russeifa', 'Al-Quwaysimah', 'Wadi Al-Seer', 'Tafilah', 'Madaba', 'Sahab', 'Karak'],
-            'Lebanon': ['Beirut', 'Tripoli', 'Sidon', 'Tyre', 'Nabatieh', 'Jounieh', 'Zahle', 'Baalbek', 'Byblos', 'Batroun'],
-            'Syria': ['Damascus', 'Aleppo', 'Homs', 'Hama', 'Latakia', 'Deir ez-Zor', 'Raqqa', 'Sweida', 'Idlib', 'Daraa'],
-            'Iraq': ['Baghdad', 'Basra', 'Mosul', 'Erbil', 'Najaf', 'Karbala', 'Kirkuk', 'Sulaymaniyah', 'Nasiriyah', 'Amarah'],
-            'Iran': ['Tehran', 'Mashhad', 'Isfahan', 'Karaj', 'Tabriz', 'Shiraz', 'Ahvaz', 'Qom', 'Kermanshah', 'Urmia'],
-            'Afghanistan': ['Kabul', 'Kandahar', 'Herat', 'Mazar-i-Sharif', 'Jalalabad', 'Kunduz', 'Ghazni', 'Balkh', 'Baghlan', 'Gardez'],
-            'Uzbekistan': ['Tashkent', 'Namangan', 'Samarkand', 'Andijan', 'Bukhara', 'Nukus', 'Qarshi', 'Kokand', 'Chirchiq', 'Fergana'],
-            'Kazakhstan': ['Almaty', 'Nur-Sultan', 'Shymkent', 'Aktobe', 'Karaganda', 'Taraz', 'Pavlodar', 'Ust-Kamenogorsk', 'Kyzylorda', 'Semey'],
-            'Kyrgyzstan': ['Bishkek', 'Osh', 'Jalal-Abad', 'Karakol', 'Tokmok', 'Kyzyl-Kiya', 'Naryn', 'Talas', 'Kant', 'Batken'],
-            'Tajikistan': ['Dushanbe', 'Khujand', 'Kulob', 'Istaravshan', 'Konibodom', 'Tursunzoda', 'Isfara', 'Panjakent', 'Shakhrisabz', 'Hisar'],
-            'Turkmenistan': ['Ashgabat', 'Türkmenabat', 'Daşoguz', 'Mary', 'Balkanabat', 'Bayramaly', 'Türkmenbaşy', 'Tejen', 'Abadan', 'Yolöten'],
-            'Palestine': ['Gaza', 'Hebron', 'Nablus', 'Rafah', 'Khan Yunis', 'Jabalia', 'Beit Lahia', 'Beit Hanoun', 'Dayr al-Balah', 'Jericho'],
-            'Oman': ['Muscat', 'Seeb', 'Salalah', 'Bawshar', 'Sohar', 'As Suwayq', 'Ibri', 'Saham', 'Barka', 'Rustaq'],
-            'Kuwait': ['Kuwait City', 'Al Ahmadi', 'Hawalli', 'Al Farwaniyah', 'Al Jahra', 'As Salimiyah', 'Sabah as Salim', 'Al Manqaf', 'Al Fintas', 'Mubarak al-Kabeer'],
-            'Qatar': ['Doha', 'Al Rayyan', 'Umm Salal', 'Al Khor', 'Al Wakrah', 'Ar Rayyan', 'Ash Shihaniyah', 'Al Daayen', 'Al Shamal', 'Madinat ash Shamal'],
-            'Bahrain': ['Manama', 'Riffa', 'Muharraq', 'Hamad Town', 'A\'ali', 'Isa Town', 'Sitra', 'Budaiya', 'Jidhafs', 'Al Hidd'],
-            'Maldives': ['Malé', 'Addu City', 'Fuvahmulah', 'Kulhudhuffushi', 'Thinadhoo', 'Naifaru', 'Dhidhdhoo', 'Hithadhoo', 'Kulhudhuffushi', 'Manadhoo'],
-            'Yemen': ['Sana\'a', 'Aden', 'Taiz', 'Al Hudaydah', 'Mukalla', 'Ibb', 'Dhamar', 'Amran', 'Sayyan', 'Zabid'],
-            'Sudan': ['Khartoum', 'Omdurman', 'Khartoum North', 'Port Sudan', 'Kassala', 'Al-Ubayyid', 'Al-Qadarif', 'Wad Madani', 'Al-Fashir', 'Kosti'],
-            'Russia': ['Moscow', 'Saint Petersburg', 'Novosibirsk', 'Yekaterinburg', 'Nizhny Novgorod', 'Kazan', 'Chelyabinsk', 'Omsk', 'Samara', 'Rostov-on-Don'],
-            'China': ['Shanghai', 'Beijing', 'Shenzhen', 'Guangzhou', 'Dongguan', 'Tianjin', 'Hangzhou', 'Nanjing', 'Chengdu', 'Wuhan'],
-            'Argentina': ['Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'Tucumán', 'La Plata', 'Mar del Plata', 'Salta', 'Santa Fe', 'San Juan'],
-            'Brazil': ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Salvador', 'Fortaleza', 'Belo Horizonte', 'Manaus', 'Curitiba', 'Recife', 'Porto Alegre'],
-            'Mexico': ['Mexico City', 'Ecatepec', 'Guadalajara', 'Puebla', 'Juárez', 'Tijuana', 'León', 'Mérida', 'Monterrey', 'Querétaro'],
-            'Colombia': ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Cúcuta', 'Bucaramanga', 'Pereira', 'Santa Marta', 'Ibagué'],
-            'Peru': ['Lima', 'Arequipa', 'Trujillo', 'Chiclayo', 'Piura', 'Cusco', 'Chimbote', 'Huancayo', 'Iquitos', 'Tacna'],
-            'Chile': ['Santiago', 'Puente Alto', 'Antofagasta', 'Viña del Mar', 'Valparaíso', 'Talcahuano', 'San Bernardo', 'Temuco', 'Iquique', 'Concepción'],
-            'Taiwan': ['Taipei', 'Kaohsiung', 'Taichung', 'Tainan', 'Banqiao', 'Xinying', 'Hsinchu', 'Keelung', 'Chiayi', 'Changhua'],
-            'Ukraine': ['Kyiv', 'Kharkiv', 'Dnipro', 'Donetsk', 'Odesa', 'Zaporizhzhia', 'Lviv', 'Kryvyi Rih', 'Mykolaiv', 'Mariupol'],
-            'Romania': ['Bucharest', 'Cluj-Napoca', 'Timișoara', 'Iași', 'Constanța', 'Craiova', 'Brașov', 'Galați', 'Ploiești', 'Oradea'],
-            'Bulgaria': ['Sofia', 'Plovdiv', 'Varna', 'Burgas', 'Ruse', 'Stara Zagora', 'Pleven', 'Sliven', 'Dobrich', 'Shumen'],
-            'Croatia': ['Zagreb', 'Split', 'Rijeka', 'Osijek', 'Zadar', 'Pula', 'Slavonski Brod', 'Karlovac', 'Varaždin', 'Šibenik'],
-            'Serbia': ['Belgrade', 'Novi Sad', 'Niš', 'Kragujevac', 'Subotica', 'Loznica', 'Čačak', 'Kruševac', 'Kraljevo', 'Zrenjanin'],
-            'Bosnia and Herzegovina': ['Sarajevo', 'Banja Luka', 'Tuzla', 'Zenica', 'Mostar', 'Bihać', 'Brčko', 'Bijeljina', 'Prijedor', 'Trebinje'],
-            'Albania': ['Tirana', 'Durrës', 'Vlorë', 'Elbasan', 'Shkodër', 'Korçë', 'Fier', 'Berat', 'Lushnjë', 'Kavajë'],
-            'North Macedonia': ['Skopje', 'Bitola', 'Kumanovo', 'Prilep', 'Tetovo', 'Veles', 'Ohrid', 'Gostivar', 'Strumica', 'Kavadarci'],
-            'Montenegro': ['Podgorica', 'Nikšić', 'Herceg Novi', 'Pljevlja', 'Budva', 'Bar', 'Cetinje', 'Ulcinj', 'Tivat', 'Kotor'],
-            'Kosovo': ['Pristina', 'Prizren', 'Ferizaj', 'Pejë', 'Gjilan', 'Gjakovë', 'Mitrovicë', 'Vushtrri', 'Suharekë', 'Rahovec'],
-            'Slovenia': ['Ljubljana', 'Maribor', 'Celje', 'Kranj', 'Velenje', 'Koper', 'Novo Mesto', 'Ptuj', 'Trbovlje', 'Kamnik'],
-            'Slovakia': ['Bratislava', 'Košice', 'Prešov', 'Žilina', 'Banská Bystrica', 'Nitra', 'Trnava', 'Martin', 'Trenčín', 'Poprad'],
-            'Estonia': ['Tallinn', 'Tartu', 'Narva', 'Pärnu', 'Kohtla-Järve', 'Viljandi', 'Rakvere', 'Maardu', 'Kuressaare', 'Sillamäe'],
-            'Latvia': ['Riga', 'Daugavpils', 'Liepāja', 'Jelgava', 'Jūrmala', 'Ventspils', 'Rēzekne', 'Valmiera', 'Ogre', 'Tukums'],
-            'Lithuania': ['Vilnius', 'Kaunas', 'Klaipėda', 'Šiauliai', 'Panevėžys', 'Alytus', 'Marijampolė', 'Mažeikiai', 'Jonava', 'Utena'],
-            'Belarus': ['Minsk', 'Gomel', 'Mogilev', 'Vitebsk', 'Grodno', 'Brest', 'Bobruisk', 'Baranovichi', 'Borisov', 'Pinsk'],
-            'Moldova': ['Chișinău', 'Tiraspol', 'Bălți', 'Bendery', 'Rîbnița', 'Cahul', 'Ungheni', 'Soroca', 'Orhei', 'Dubăsari'],
-            'Georgia': ['Tbilisi', 'Kutaisi', 'Batumi', 'Rustavi', 'Sukhumi', 'Zugdidi', 'Gori', 'Poti', 'Samtredia', 'Khashuri'],
-            'Armenia': ['Yerevan', 'Gyumri', 'Vanadzor', 'Vagharshapat', 'Hrazdan', 'Abovyan', 'Kapan', 'Ararat', 'Armavir', 'Artashat'],
-            'Azerbaijan': ['Baku', 'Ganja', 'Sumqayit', 'Mingachevir', 'Lankaran', 'Shirvan', 'Nakhchivan', 'Shaki', 'Yevlakh', 'Barda'],
-            'Iceland': ['Reykjavík', 'Kópavogur', 'Hafnarfjörður', 'Akureyri', 'Reykjanesbær', 'Garðabær', 'Mosfellsbær', 'Árborg', 'Akranes', 'Fjardabyggd'],
-            'Zimbabwe': ['Harare', 'Bulawayo', 'Chitungwiza', 'Mutare', 'Gweru', 'Epworth', 'Kwekwe', 'Kadoma', 'Masvingo', 'Marondera']
-        };
+        // State
+        this.loc = null;         // { lat, lng, city, country }
+        this.times = null;       // raw prayer times from API
+        this.next = null;        // { name, time, diff (ms) }
+        this.qibla = 0;          // bearing to Kaaba in degrees
+        this.heading = 0;        // device compass heading
+        this._cdInterval = null;
+        this._clockInterval = null;
+        this._pwaPrompt = null;
+        this._notifTimers = [];
+        this._orientationListening = false;
+        this._orientationPermissionRequested = false;
+        this._orientationHandler = null;
+        this._smoothedHeading = null;
+        this._eventsInterval = null;
+        this._swRegistration = null;
+        this._audioCtx = null;
+        this._installButtonTouchBound = false;
 
-        this.availableCities = [];
         this.init();
     }
 
-    init() {
-        this.bindEvents();
-        this.loadSettings();
-        this.startCurrentTime();
-        this.updateCitySuggestions(''); // Initialize with popular cities
-        this.setDefaultLocation(); // Set default location immediately
-        this.hideLoading();
-        // Try to detect location in background
-        this.detectLocation();
+    _isAndroidApp() {
+        return typeof window.AndroidApp !== 'undefined' || /PrayerTimesAndroidApp/i.test(navigator.userAgent || '');
     }
 
-    bindEvents() {
-        // Location settings toggle
-        document.getElementById('location-toggle').addEventListener('click', () => {
-            const settings = document.getElementById('location-settings');
-            const display = document.getElementById('location-display');
-            settings.classList.toggle('hidden');
-            display.classList.toggle('hidden');
-        });
+    // ─────────────────────────────────────────────
+    // INIT
+    // ─────────────────────────────────────────────
+    init() {
+        this._populateCountries();
+        this._applySettings();
+        this._bindEvents();
+        this._startClock();
+        this._startEventCountdowns();
 
-        // Location detection
-        document.getElementById('detect-location').addEventListener('click', () => {
-            this.detectLocation();
-        });
+        if (!this._isAndroidApp() && 'serviceWorker' in navigator) {
+            navigator.serviceWorker.ready
+                .then(reg => {
+                    this._swRegistration = reg;
+                })
+                .catch(() => {});
+        }
 
-        // Country selection
-        document.getElementById('country-input').addEventListener('change', (e) => {
-            this.updateCitySuggestions(e.target.value);
-        });
+        // Default: Cairo — loads prayer times immediately without waiting for GPS
+        this._setLocation({ lat: 30.0444, lng: 31.2357, city: 'Cairo', country: 'Egypt' });
 
-        // Manual location search
-        document.getElementById('manual-location').addEventListener('click', () => {
-            this.searchByCity();
+        // Then attempt GPS in background
+        this._detectGPS();
+    }
+
+    // ─────────────────────────────────────────────
+    // LOCATION
+    // ─────────────────────────────────────────────
+    _setLocation(loc) {
+        this.loc = loc;
+        this._setEl('loc-label', `${loc.city}, ${loc.country}`);
+        this._setEl('qibla-from', `${loc.city}, ${loc.country}`);
+        this._calcQibla();
+        this._fetchTimes();
+    }
+
+    async _detectGPS() {
+        if (!navigator.geolocation) return;
+        try {
+            const pos = await new Promise((res, rej) =>
+                navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000, maximumAge: 300000 })
+            );
+            const { latitude: lat, longitude: lng } = pos.coords;
+            const { city, country } = await this._reverseGeocode(lat, lng);
+            this._setLocation({ lat, lng, city, country });
+        } catch (_) { /* keep default Cairo */ }
+    }
+
+    async _reverseGeocode(lat, lng) {
+        try {
+            const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
+            const d = await r.json();
+            return { city: d.city || d.locality || 'Unknown', country: d.countryName || 'Unknown' };
+        } catch (_) {
+            return { city: `${lat.toFixed(3)}°`, country: `${lng.toFixed(3)}°` };
+        }
+    }
+
+    async _searchCity() {
+        const city = this._getEl('city-inp')?.value.trim();
+        const country = this._getEl('country-sel')?.value;
+        if (!country) { this._locErr('Please select a country first.'); return; }
+        if (!city) { this._locErr('Please enter a city name.'); return; }
+
+        const btn = this._getEl('search-btn');
+        if (!btn) return;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Searching...';
+        btn.disabled = true;
+
+        try {
+            // Try geocoding for accurate coordinates
+            const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&language=en&limit=1`);
+            const d = await r.json();
+            if (d.results?.length) {
+                const g = d.results[0];
+                this._setLocation({ lat: g.latitude, lng: g.longitude, city, country });
+            } else {
+                // Fall back to city-based API endpoint
+                this.loc = { city, country, method: 'city' };
+                this._setEl('loc-label', `${city}, ${country}`);
+                this._setEl('qibla-from', `${city}, ${country}`);
+                await this._fetchTimes();
+            }
+            this._closeLocPanel();
+        } catch (e) {
+            this._locErr('City not found. Please check the spelling.');
+        } finally {
+            btn.innerHTML = '<i class="fas fa-magnifying-glass"></i>Search';
+            btn.disabled = false;
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // PRAYER TIMES API
+    // ─────────────────────────────────────────────
+    async _fetchTimes() {
+        if (!this.loc) return;
+        try {
+            const base = 'https://api.aladhan.com/v1';
+            const ts = Math.floor(Date.now() / 1000);
+            let url;
+
+            if (this.loc.lat !== undefined) {
+                url = `${base}/timings/${ts}?latitude=${this.loc.lat}&longitude=${this.loc.lng}&method=${this.s.method}`;
+            } else {
+                url = `${base}/timingsByCity?city=${encodeURIComponent(this.loc.city)}&country=${encodeURIComponent(this.loc.country)}&method=${this.s.method}`;
+            }
+
+            const r = await fetch(url);
+            const d = await r.json();
+
+            if (d.code === 200) {
+                this.times = d.data.timings;
+                this._updateDates(d.data.date);
+                this._renderTimes();
+                this._calcNext();
+                this._startCountdown();
+                if (this.s.notifs) this._scheduleNotifications();
+            } else {
+                throw new Error(d.status || 'API error');
+            }
+        } catch (e) {
+            this._showErr('Failed to load prayer times. Check your connection and try again.');
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // RENDER DATES
+    // ─────────────────────────────────────────────
+    _updateDates(dateData) {
+        const g = dateData.gregorian;
+        const h = dateData.hijri;
+        this._setEl('gregorian-date', `${g.weekday.en}, ${g.day} ${g.month.en} ${g.year}`);
+        this._setEl('hijri-date', `${h.day} ${h.month.en} ${h.year} هـ`);
+    }
+
+    // ─────────────────────────────────────────────
+    // RENDER PRAYER TIMES
+    // ─────────────────────────────────────────────
+    _renderTimes() {
+        if (!this.times) return;
+        const map = {
+            Fajr: 'fajr-time', Sunrise: 'sunrise-time', Dhuhr: 'dhuhr-time',
+            Asr: 'asr-time', Maghrib: 'maghrib-time', Isha: 'isha-time',
+            Imsak: 'imsak-time', Midnight: 'midnight-time',
+            Firstthird: 'firstthird-time', Lastthird: 'lastthird-time'
+        };
+        for (const [prayer, elId] of Object.entries(map)) {
+            const raw = this.times[prayer] || this.times[prayer.charAt(0).toUpperCase() + prayer.slice(1)];
+            if (raw) this._setEl(elId, this._fmt(raw));
+        }
+        this._highlightCurrent();
+    }
+
+    // ─────────────────────────────────────────────
+    // FORMAT TIME  "14:30" → "2:30 PM" or "14:30"
+    // ─────────────────────────────────────────────
+    _fmt(t) {
+        if (!t) return '--:--';
+        // Strip seconds if present e.g. "05:12 (CEST)"
+        const clean = t.replace(/\s+\(.*\)/, '').replace(/:\d\d$/, (m) => m.length > 3 ? '' : m).trim();
+        if (this.s.timeFormat === '24') return clean;
+        const [hStr, mStr] = clean.split(':');
+        const h = parseInt(hStr);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        return `${h12}:${mStr} ${ampm}`;
+    }
+
+    // ─────────────────────────────────────────────
+    // NEXT PRAYER CALCULATION
+    // ─────────────────────────────────────────────
+    _calcNext() {
+        if (!this.times) return;
+        const now = new Date();
+        const nowMs = now.getTime();
+
+        let best = null;
+        let bestDiff = Infinity;
+
+        for (const name of MAIN_PRAYERS) {
+            const raw = this.times[name];
+            if (!raw) continue;
+            const [h, m] = raw.split(':').map(Number);
+            const pDate = new Date(now);
+            pDate.setHours(h, m, 0, 0);
+            let diff = pDate - nowMs;
+            if (diff <= 0) diff += 86400000; // tomorrow
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = { name, time: raw, diff };
+            }
+        }
+
+        if (best) {
+            this.next = best;
+            this._setEl('next-name', best.name);
+            this._setEl('next-arabic', ARABIC[best.name] || '');
+            this._setEl('next-time', this._fmt(best.time));
+            this._highlightCurrent();
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // COUNTDOWN TIMER
+    // ─────────────────────────────────────────────
+    _startCountdown() {
+        if (this._cdInterval) clearInterval(this._cdInterval);
+        this._cdInterval = setInterval(() => this._tickCountdown(), 1000);
+        this._tickCountdown();
+    }
+
+    _tickCountdown() {
+        if (!this.next) return;
+        const now = new Date();
+        const [h, m] = this.next.time.split(':').map(Number);
+        const target = new Date();
+        target.setHours(h, m, 0, 0);
+        let diff = target - now;
+        if (diff <= 0) {
+            diff += 86400000;
+            // Recalculate next prayer at boundary
+            this._calcNext();
+        }
+
+        const hrs = Math.floor(diff / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        const countdown = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+        this._setEl('cd-h', String(hrs).padStart(2, '0'));
+        this._setEl('cd-m', String(mins).padStart(2, '0'));
+        this._setEl('cd-s', String(secs).padStart(2, '0'));
+        this._setEl('countdown', countdown);
+        this._updateMobileReminder(now);
+    }
+
+    // ─────────────────────────────────────────────
+    // LIVE CLOCK
+    // ─────────────────────────────────────────────
+    _startClock() {
+        this._updateClock();
+        this._clockInterval = setInterval(() => this._updateClock(), 1000);
+    }
+
+    _updateClock() {
+        const now = new Date();
+        let s;
+        if (this.s.timeFormat === '12') {
+            s = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } else {
+            s = now.toTimeString().slice(0, 8);
+        }
+        this._setEl('current-time', s);
+    }
+
+    // ─────────────────────────────────────────────
+    // ISLAMIC EVENTS COUNTDOWNS
+    // ─────────────────────────────────────────────
+    _startEventCountdowns() {
+        this._updateEventCountdowns();
+        if (this._eventsInterval) clearInterval(this._eventsInterval);
+        this._eventsInterval = setInterval(() => this._updateEventCountdowns(), 60 * 60 * 1000);
+    }
+
+    _updateEventCountdowns() {
+        const events = [
+            { key: 'ramadan', month: 9, day: 1, dateEl: 'ramadan-date', countdownEl: 'ramadan-countdown' },
+            { key: 'eidFitr', month: 10, day: 1, dateEl: 'eid-fitr-date', countdownEl: 'eid-fitr-countdown' },
+            { key: 'eidAdha', month: 12, day: 10, dateEl: 'eid-adha-date', countdownEl: 'eid-adha-countdown' }
+        ];
+
+        for (const ev of events) {
+            const target = this._findNextIslamicDate(ev.month, ev.day);
+            if (!target) {
+                this._setEl(ev.dateEl, 'Not available');
+                this._setEl(ev.countdownEl, '--');
+                continue;
+            }
+
+            this._setEl(ev.dateEl, target.toLocaleDateString('en-GB', {
+                weekday: 'short',
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            }));
+            this._setEl(ev.countdownEl, this._daysUntilLabel(target));
+        }
+    }
+
+    _daysUntilLabel(targetDate) {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+        const days = Math.ceil((target - start) / 86400000);
+
+        if (days <= 0) return 'Today';
+        if (days === 1) return '1 day';
+        return `${days} days`;
+    }
+
+    _findNextIslamicDate(targetMonth, targetDay) {
+        const today = new Date();
+        for (let i = 0; i < 900; i++) {
+            const probe = new Date(today);
+            probe.setDate(today.getDate() + i);
+            probe.setHours(12, 0, 0, 0);
+
+            const h = this._getIslamicDateParts(probe);
+            if (!h) continue;
+            if (h.month === targetMonth && h.day === targetDay) return probe;
+        }
+        return null;
+    }
+
+    _getIslamicDateParts(date) {
+        try {
+            const fmt = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+                day: 'numeric',
+                month: 'numeric',
+                year: 'numeric'
+            });
+            const parts = fmt.formatToParts(date);
+            const day = parseInt(parts.find(p => p.type === 'day')?.value, 10);
+            const month = parseInt(parts.find(p => p.type === 'month')?.value, 10);
+            const year = parseInt(parts.find(p => p.type === 'year')?.value, 10);
+            if ([day, month, year].some(Number.isNaN)) return null;
+            return { day, month, year };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // HIGHLIGHT CURRENT ACTIVE PRAYER CARD
+    // ─────────────────────────────────────────────
+    _highlightCurrent() {
+        document.querySelectorAll('.prayer-card').forEach(c => c.classList.remove('active'));
+        if (this.next) {
+            const card = document.querySelector(`[data-prayer="${this.next.name}"]`);
+            if (card) card.classList.add('active');
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // QIBLA COMPASS
+    // ─────────────────────────────────────────────
+    _calcQibla() {
+        if (!this.loc || this.loc.lat === undefined) return;
+
+        // Kaaba coordinates
+        const kLat = 21.4225, kLng = 39.8262;
+        const lat1 = this.loc.lat * Math.PI / 180;
+        const lat2 = kLat * Math.PI / 180;
+        const dLng = (kLng - this.loc.lng) * Math.PI / 180;
+
+        const y = Math.sin(dLng) * Math.cos(lat2);
+        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+        let bearing = Math.atan2(y, x) * 180 / Math.PI;
+        bearing = (bearing + 360) % 360;
+
+        this.qibla = bearing;
+        this._renderQibla();
+        this._setupDeviceOrientation();
+    }
+
+    _renderQibla() {
+        const b = Math.round(this.qibla);
+        this._setEl('qibla-deg', `${b}°`);
+        this._setEl('debug-bearing', `${b}°`);
+
+        // Direction name
+        const dirs = [
+            [337.5, 360, 'North ↑'], [0, 22.5, 'North ↑'],
+            [22.5, 67.5, 'Northeast ↗'], [67.5, 112.5, 'East →'],
+            [112.5, 157.5, 'Southeast ↘'], [157.5, 202.5, 'South ↓'],
+            [202.5, 247.5, 'Southwest ↙'], [247.5, 292.5, 'West ←'],
+            [292.5, 337.5, 'Northwest ↖']
+        ];
+        let dir = 'North';
+        for (const [lo, hi, name] of dirs) {
+            if (b >= lo && b < hi) { dir = name; break; }
+        }
+        this._setEl('qibla-dir', dir);
+
+        // Rotate needle (static, no device orientation yet)
+        this._rotateNeedle(this.qibla - this.heading);
+    }
+
+    _rotateNeedle(angle) {
+        const wrap = this._getEl('needle-wrap');
+        if (wrap) wrap.style.transform = `rotate(${angle}deg)`;
+    }
+
+    _setupDeviceOrientation() {
+        if (this._orientationListening || this._orientationPermissionRequested) return;
+
+        // iOS 13+ requires explicit permission
+        if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+            this._orientationPermissionRequested = true;
+            document.addEventListener('click', () => {
+                DeviceOrientationEvent.requestPermission()
+                    .then(s => {
+                        this._orientationPermissionRequested = false;
+                        if (s === 'granted') this._listenOrientation();
+                    })
+                    .catch(() => {
+                        this._orientationPermissionRequested = false;
+                    });
+            }, { once: true });
+        } else if (window.DeviceOrientationEvent) {
+            this._listenOrientation();
+        }
+    }
+
+    _listenOrientation() {
+        if (this._orientationListening) return;
+
+        const handler = (e) => {
+            const rawHeading = this._extractHeading(e);
+            if (rawHeading === null) return;
+
+            const previous = this._smoothedHeading ?? rawHeading;
+            const delta = this._shortestAngleDelta(previous, rawHeading);
+
+            if (Math.abs(delta) < 1.2) return;
+
+            const smoothing = e.absolute ? 0.18 : 0.1;
+            this._smoothedHeading = (previous + delta * smoothing + 360) % 360;
+            this.heading = this._smoothedHeading;
+            this._rotateNeedle(this.qibla - this.heading);
+            this._setEl('dbg-heading', `${Math.round(this.heading)}°`);
+        };
+
+        this._orientationHandler = handler;
+        window.addEventListener('deviceorientationabsolute', handler);
+        window.addEventListener('deviceorientation', handler);
+        this._orientationListening = true;
+    }
+
+    // ─────────────────────────────────────────────
+    // NOTIFICATIONS
+    // ─────────────────────────────────────────────
+    async _requestNotifPermission() {
+        if (!('Notification' in window)) {
+            this._showErr('Your browser does not support notifications.'); return false;
+        }
+        if (Notification.permission === 'granted') return true;
+        const perm = await Notification.requestPermission();
+        return perm === 'granted';
+    }
+
+    async _toggleNotifs() {
+        if (!this.s.notifs) {
+            const ok = await this._requestNotifPermission();
+            if (!ok) {
+                if (typeof window.updateAlertsBadge === 'function') window.updateAlertsBadge();
+                this._showErr('Please allow notifications in your browser settings.');
+                return;
+            }
+        }
+        this.s.notifs = !this.s.notifs;
+        localStorage.setItem('it_notifs', this.s.notifs);
+        this._updateNotifToggle();
+        if (this.s.notifs && this.times) this._scheduleNotifications();
+        else this._clearNotifTimers();
+    }
+
+    _updateNotifToggle() {
+        const track = document.getElementById('notif-track');
+        const lbl = document.getElementById('notif-lbl');
+        if (track) {
+            track.classList.toggle('on', this.s.notifs);
+            track.dataset.on = this.s.notifs ? 'true' : 'false';
+        }
+        if (lbl) lbl.textContent = this.s.notifs ? 'On' : 'Off';
+        this._updateNotifOffsetSummary();
+        if (typeof window.updateAlertsBadge === 'function') window.updateAlertsBadge();
+    }
+
+    _toggleNotifSound() {
+        this.s.notifSound = !this.s.notifSound;
+        localStorage.setItem('it_notif_sound', this.s.notifSound ? 'true' : 'false');
+        this._updateNotifSoundToggle();
+    }
+
+    _updateNotifSoundToggle() {
+        const track = document.getElementById('notif-sound-track');
+        const lbl = document.getElementById('notif-sound-lbl');
+        if (track) {
+            track.classList.toggle('on', this.s.notifSound);
+            track.dataset.on = this.s.notifSound ? 'true' : 'false';
+        }
+        if (lbl) lbl.textContent = this.s.notifSound ? 'On' : 'Off';
+    }
+
+    _updateNotifOffsetSummary() {
+        const desc = document.getElementById('notif-description');
+        if (desc) {
+            desc.textContent = `Receive reminders ${this.s.notifOffset} minutes before upcoming prayers.`;
+        }
+        this._updateMobileReminder();
+    }
+
+    _getNextReminder(now = new Date()) {
+        if (!this.times) return null;
+
+        let best = null;
+        let bestDiff = Infinity;
+        const offsetMs = this.s.notifOffset * 60000;
+
+        for (const name of MAIN_PRAYERS) {
+            const raw = this.times[name];
+            if (!raw) continue;
+
+            const [h, m] = raw.split(':').map(Number);
+            const reminderDate = new Date(now);
+            reminderDate.setHours(h, m, 0, 0);
+            reminderDate.setTime(reminderDate.getTime() - offsetMs);
+
+            let diff = reminderDate.getTime() - now.getTime();
+            if (diff <= 0) {
+                reminderDate.setDate(reminderDate.getDate() + 1);
+                diff = reminderDate.getTime() - now.getTime();
+            }
+
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = {
+                    name,
+                    prayerTime: raw,
+                    reminderDate,
+                    diff
+                };
+            }
+        }
+
+        return best;
+    }
+
+    _updateMobileReminder(now = new Date()) {
+        const nameEl = this._getEl('mobile-reminder-name');
+        const detailEl = this._getEl('mobile-reminder-detail');
+        const countdownEl = this._getEl('mobile-reminder-countdown');
+        if (!nameEl || !detailEl || !countdownEl) return;
+
+        if (!this.times) {
+            nameEl.textContent = 'Loading...';
+            detailEl.textContent = 'Checking the next pre-prayer reminder.';
+            countdownEl.textContent = '--:--:--';
+            return;
+        }
+
+        const reminder = this._getNextReminder(now);
+        if (!reminder) {
+            nameEl.textContent = 'Unavailable';
+            detailEl.textContent = 'Reminder timing is not available right now.';
+            countdownEl.textContent = '--:--:--';
+            return;
+        }
+
+        const totalSeconds = Math.max(0, Math.floor(reminder.diff / 1000));
+        const hrs = Math.floor(totalSeconds / 3600);
+        const mins = Math.floor((totalSeconds % 3600) / 60);
+        const secs = totalSeconds % 60;
+
+        nameEl.textContent = `${this.s.notifOffset} min before ${reminder.name}`;
+        detailEl.textContent = `${this._fmt(reminder.prayerTime)} prayer time${this.s.notifs ? '' : ' • alerts are off'}`;
+        countdownEl.textContent = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    _scheduleNotifications() {
+        this._clearNotifTimers();
+        if (!this.times || !this.s.notifs) return;
+        const now = new Date();
+        const offsetMs = this.s.notifOffset * 60000;
+
+        for (const name of MAIN_PRAYERS) {
+            const raw = this.times[name];
+            if (!raw) continue;
+            const [h, m] = raw.split(':').map(Number);
+            const target = new Date();
+            target.setHours(h, m, 0, 0);
+            target.setTime(target.getTime() - offsetMs);
+            let diff = target - now;
+            if (diff <= 0) diff += 86400000;
+            if (diff > 0 && diff < 86400000) {
+                const t = setTimeout(() => {
+                    if (Notification.permission === 'granted') {
+                        const shouldPlaySound = this.s.notifSound;
+                        const payload = {
+                            body: `${this.s.notifOffset} minutes until ${name} prayer (${this._fmt(raw)})`,
+                            icon: 'icons/icon-192.png',
+                            badge: 'icons/icon-192.png',
+                            tag: `prayer-${name.toLowerCase()}-${this.s.notifOffset}`,
+                            silent: !shouldPlaySound
+                        };
+
+                        if (this._swRegistration?.showNotification) {
+                            this._swRegistration.showNotification(`Prayer Reminder: ${name}`, payload);
+                        } else {
+                            new Notification(`Prayer Reminder: ${name}`, payload);
+                        }
+
+                        if (shouldPlaySound) this._playNotifSound();
+                    }
+                }, diff);
+                this._notifTimers.push(t);
+            }
+        }
+    }
+
+    _clearNotifTimers() {
+        this._notifTimers.forEach(t => clearTimeout(t));
+        this._notifTimers = [];
+    }
+
+    _playNotifSound() {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            if (!this._audioCtx) this._audioCtx = new AudioCtx();
+            if (this._audioCtx.state === 'suspended') this._audioCtx.resume().catch(() => {});
+
+            const ctx = this._audioCtx;
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, now);
+            osc.frequency.exponentialRampToValueAtTime(660, now + 0.15);
+
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.22);
+        } catch (_) {}
+    }
+
+    // ─────────────────────────────────────────────
+    // SHARE
+    // ─────────────────────────────────────────────
+    _share() {
+        if (!this.times) { this._showToast('Prayer times not loaded yet.'); return; }
+
+        const loc = this.loc ? `${this.loc.city}, ${this.loc.country}` : 'Cairo, Egypt';
+        const lines = MAIN_PRAYERS.map(p => `${p}: ${this._fmt(this.times[p])}`).join('\n');
+        const text = `🕌 Prayer Times — ${loc}\n\n${lines}\n\nvia islamtimes.netlify.app`;
+
+        if (navigator.share) {
+            navigator.share({ title: 'Prayer Times', text, url: 'https://islamtimes.netlify.app/' }).catch(() => {});
+        } else {
+            navigator.clipboard.writeText(text).then(() => this._showToast('Copied to clipboard! ✓'));
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // THEME
+    // ─────────────────────────────────────────────
+    _toggleTheme() {
+        this.s.theme = this.s.theme === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('it_theme', this.s.theme);
+        this._applyTheme();
+    }
+
+    _applyTheme() {
+        const isLight = this.s.theme === 'light';
+        document.documentElement.classList.toggle('dark', !isLight);
+        document.documentElement.classList.toggle('light', isLight);
+        document.body.classList.toggle('dark', !isLight);
+        document.body.classList.toggle('light', isLight);
+        document.body.style.colorScheme = isLight ? 'light' : 'dark';
+
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) {
+            themeMeta.setAttribute('content', isLight ? '#f0fdf4' : '#059669');
+        }
+
+        const track = this._getEl('theme-track');
+        const lbl = this._getEl('theme-lbl');
+        const icon = this._getEl('theme-icon');
+        if (track) track.classList.toggle('on', isLight);
+        if (lbl) lbl.textContent = isLight ? 'Light' : 'Dark';
+        if (icon) { icon.className = isLight ? 'fas fa-sun' : 'fas fa-moon'; }
+
+        const button = this._getEl('theme-btn');
+        if (button) {
+            const buttonIcon = button.querySelector('i');
+            const buttonText = button.querySelector('span');
+            if (buttonIcon) buttonIcon.className = isLight ? 'fas fa-sun mr-3 text-xl' : 'fas fa-moon mr-3 text-xl';
+            if (buttonText) buttonText.textContent = isLight ? 'Light Mode - الوضع الفاتح' : 'Dark Mode - الوضع المظلم';
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // SETTINGS APPLY
+    // ─────────────────────────────────────────────
+    _applySettings() {
+        // Theme
+        this._applyTheme();
+
+        // Selects
+        const methodSel = this._getEl('method-sel');
+        const fmtSel = this._getEl('format-sel');
+        const notifOffsetSel = this._getEl('notif-offset-sel');
+        if (methodSel) methodSel.value = this.s.method;
+        if (fmtSel) fmtSel.value = this.s.timeFormat;
+        if (notifOffsetSel) notifOffsetSel.value = String(this.s.notifOffset);
+
+        // Notif toggle
+        this._updateNotifToggle();
+        this._updateNotifSoundToggle();
+    }
+
+    // ─────────────────────────────────────────────
+    // COUNTRY / CITY DROPDOWNS
+    // ─────────────────────────────────────────────
+    _populateCountries() {
+        const sel = this._getEl('country-sel');
+        if (!sel) return;
+        if (sel.options.length > 1) return;
+        Object.keys(CITIES).sort().forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            sel.appendChild(opt);
+        });
+    }
+
+    _onCountryChange(country) {
+        const inp = this._getEl('city-inp');
+        const drop = this._getEl('city-drop');
+        if (!inp || !drop) return;
+
+        inp.disabled = !country;
+        inp.value = '';
+        inp.placeholder = country ? `Type or choose a city in ${country}` : 'Select country first';
+        drop.innerHTML = '';
+        drop.classList.add('hidden');
+
+        if (country && CITIES[country]) {
+            this._renderCityDrop(CITIES[country]);
+        }
+    }
+
+    _renderCityDrop(cities) {
+        const drop = this._getEl('city-drop');
+        if (!drop) return;
+        drop.innerHTML = cities.map(c =>
+            `<li data-city="${c}">${c}</li>`
+        ).join('');
+        drop.classList.remove('hidden');
+    }
+
+    _filterCities(q) {
+        const country = this._getEl('country-sel')?.value;
+        if (!country || !CITIES[country]) return;
+        const filtered = CITIES[country].filter(c => c.toLowerCase().includes(q.toLowerCase()));
+        if (filtered.length) this._renderCityDrop(filtered);
+        else this._getEl('city-drop')?.classList.add('hidden');
+    }
+
+    // ─────────────────────────────────────────────
+    // PWA INSTALL
+    // ─────────────────────────────────────────────
+    _showInstallBtn() {
+        const btn = this._getEl('install-btn');
+        if (!btn || this._isStandalone() || this._isAndroidApp()) return;
+        this._updateInstallButtonLabel();
+        btn.classList.remove('hidden');
+        btn.classList.add('flex');
+        btn.classList.add('visible');
+    }
+
+    _hideInstallBtn() {
+        const btn = this._getEl('install-btn');
+        if (!btn) return;
+        btn.classList.remove('visible');
+        btn.classList.remove('flex');
+        btn.classList.add('hidden');
+    }
+
+    _syncInstallButtonVisibility() {
+        if (this._isStandalone() || this._isAndroidApp()) {
+            this._hideInstallBtn();
+            return;
+        }
+
+        if (!this._isMobileViewport()) {
+            this._showInstallBtn();
+            return;
+        }
+
+        this._updateInstallButtonLabel();
+        this._showInstallBtn();
+    }
+
+    async _installApp() {
+        if (this._isAndroidApp()) {
+            this._showToast('This APK is already installed on your phone.');
+            this._hideInstallBtn();
+            return;
+        }
+
+        if (this._isStandalone()) {
+            this._showToast('The app is already installed.');
+            this._hideInstallBtn();
+            return;
+        }
+
+        if (this._pwaPrompt) {
+            this._pwaPrompt.prompt();
+            const { outcome } = await this._pwaPrompt.userChoice;
+            if (outcome === 'accepted') this._hideInstallBtn();
+            this._pwaPrompt = null;
+            this._updateInstallButtonLabel();
+            return;
+        }
+
+        if (this._isIos()) {
+            this._showToast('On iPhone: tap Share, then Add to Home Screen.');
+            return;
+        }
+
+        if (this._isMobileViewport()) {
+            this._showToast('Open the browser menu and choose Install app or Add to Home screen.');
+            return;
+        }
+
+        this._showToast('Use your browser menu to install this app.');
+    }
+
+    _updateInstallButtonLabel() {
+        const label = this._getEl('install-button-label');
+        if (!label) return;
+
+        if (this._isIos()) {
+            label.textContent = 'Add to Home Screen - تثبيت التطبيق';
+            return;
+        }
+
+        if (this._isMobileViewport() && !this._pwaPrompt) {
+            label.textContent = 'Install Guide - تثبيت التطبيق';
+            return;
+        }
+
+        label.textContent = 'Install App - تثبيت التطبيق';
+    }
+
+    // ─────────────────────────────────────────────
+    // BIND ALL EVENTS
+    // ─────────────────────────────────────────────
+    _bindEvents() {
+
+        // Header buttons
+        this._getEl('notif-btn')?.addEventListener('click', () => this._toggleNotifs());
+        this._getEl('share-btn')?.addEventListener('click', () => this._share());
+        this._getEl('theme-btn')?.addEventListener('click', () => this._toggleTheme());
+
+        // Location panel
+        this._getEl('loc-btn')?.addEventListener('click', () => this._toggleLocPanel());
+        this._getEl('loc-close')?.addEventListener('click', () => this._closeLocPanel());
+        this._getEl('detect-btn')?.addEventListener('click', async () => {
+            const btn = this._getEl('detect-btn');
+            if (!btn) return;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Detecting...';
+            btn.disabled = true;
+            await this._detectGPS();
+            this._closeLocPanel();
+            btn.innerHTML = '<i class="fas fa-crosshairs"></i>Auto-detect';
+            btn.disabled = false;
+        });
+        this._getEl('search-btn')?.addEventListener('click', () => this._searchCity());
+
+        // Country/city selects
+        this._getEl('country-sel')?.addEventListener('change', e => this._onCountryChange(e.target.value));
+        this._getEl('city-inp')?.addEventListener('input', e => this._filterCities(e.target.value));
+        this._getEl('city-inp')?.addEventListener('focus', () => {
+            const country = this._getEl('country-sel')?.value;
+            if (country && CITIES[country]) this._renderCityDrop(CITIES[country]);
+        });
+        this._getEl('city-inp')?.addEventListener('blur', () => {
+            setTimeout(() => this._getEl('city-drop')?.classList.add('hidden'), 180);
+        });
+        this._getEl('city-drop')?.addEventListener('click', e => {
+            const li = e.target.closest('li');
+            if (li?.dataset.city) {
+                this._getEl('city-inp').value = li.dataset.city;
+                this._getEl('city-drop').classList.add('hidden');
+            }
+        });
+        this._getEl('city-inp')?.addEventListener('keypress', e => {
+            if (e.key === 'Enter') this._searchCity();
         });
 
         // Settings
-        document.getElementById('time-format').addEventListener('change', (e) => {
-            this.settings.timeFormat = e.target.value;
-            this.saveSettings();
-            this.updatePrayerTimesDisplay();
+        this._getEl('method-sel')?.addEventListener('change', e => {
+            this.s.method = e.target.value;
+            localStorage.setItem('it_method', this.s.method);
+            this._fetchTimes();
         });
-
-        document.getElementById('calculation-method').addEventListener('change', (e) => {
-            this.settings.calculationMethod = e.target.value;
-            this.saveSettings();
-            this.fetchPrayerTimes();
+        this._getEl('format-sel')?.addEventListener('change', e => {
+            this.s.timeFormat = e.target.value;
+            localStorage.setItem('it_fmt', this.s.timeFormat);
+            this._renderTimes();
+            this._calcNext();
         });
-
-        document.getElementById('theme-toggle').addEventListener('click', () => {
-            this.toggleTheme();
+        this._getEl('notif-offset-sel')?.addEventListener('change', e => {
+            this.s.notifOffset = parseInt(e.target.value, 10) || 10;
+            localStorage.setItem('it_notif_offset', String(this.s.notifOffset));
+            this._updateNotifOffsetSummary();
+            if (this.s.notifs && this.times) this._scheduleNotifications();
         });
-
-        // Enter key for city/country inputs
-        document.getElementById('city-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.searchByCity();
-        });
-        document.getElementById('country-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.searchByCity();
-        });
-
-        // Add helpful hints for city input
-        document.getElementById('city-input').addEventListener('focus', () => {
-            this.showSearchHint();
-            this.showCitySuggestionList();
-        });
-
-        document.getElementById('city-input').addEventListener('input', (e) => {
-            this.updateSearchHint(e.target.value);
-            this.filterCitySuggestions(e.target.value);
-        });
-
-        document.getElementById('city-input').addEventListener('blur', () => {
-            // Hide hint and city list after a short delay to allow for clicks on list options
-            setTimeout(() => {
-                const hintDiv = document.getElementById('search-hint');
-                if (hintDiv) {
-                    hintDiv.remove();
-                }
-                this.hideCitySuggestionList();
-            }, 200);
-        });
-
-        const citySuggestionList = document.getElementById('city-suggestion-list');
-        citySuggestionList.addEventListener('click', (e) => {
-            const item = e.target.closest('li');
-            if (!item) return;
-            const city = item.dataset.city;
-            if (city) {
-                const cityInput = document.getElementById('city-input');
-                cityInput.value = city;
-                this.hideCitySuggestionList();
+        document.getElementById('notif-sound-row')?.addEventListener('click', () => this._toggleNotifSound());
+        document.getElementById('notif-sound-row')?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                this._toggleNotifSound();
             }
         });
 
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('#city-list-container')) {
-                this.hideCitySuggestionList();
-            }
-        });
+        // In-settings toggles (duplicate of header for convenience)
+        document.getElementById('notif-row')?.addEventListener('click', () => this._toggleNotifs());
+        document.getElementById('theme-row')?.addEventListener('click', () => this._toggleTheme());
 
-        // PWA Install functionality
-        window.addEventListener('beforeinstallprompt', (e) => {
+        // PWA install
+        window.addEventListener('beforeinstallprompt', e => {
             e.preventDefault();
-            this.deferredPrompt = e;
-            this.showInstallButton();
+            this._pwaPrompt = e;
+            this._syncInstallButtonVisibility();
         });
-
         window.addEventListener('appinstalled', () => {
-            this.hideInstallButton();
-            this.deferredPrompt = null;
+            this._hideInstallBtn();
+            this._showToast('PrayerTimes installed successfully.');
+        });
+        const installBtn = this._getEl('install-btn');
+        installBtn?.addEventListener('click', () => this._installApp());
+        if (installBtn && !this._installButtonTouchBound) {
+            installBtn.addEventListener('touchend', (event) => {
+                event.preventDefault();
+                this._installApp();
+            }, { passive: false });
+            this._installButtonTouchBound = true;
+        }
+
+        window.addEventListener('load', () => this._syncInstallButtonVisibility(), { once: true });
+        window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change', () => this._syncInstallButtonVisibility());
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) this._syncInstallButtonVisibility();
         });
 
-        // Install button click
-        document.getElementById('install-button').addEventListener('click', () => {
-            this.installApp();
+        // Close location panel when clicking outside
+        document.addEventListener('click', e => {
+            const panel = this._getEl('loc-panel');
+            const btn = this._getEl('loc-btn');
+            if (panel && !panel.classList.contains('hidden') &&
+                !panel.contains(e.target) && !btn?.contains(e.target)) {
+                this._closeLocPanel();
+            }
         });
-
-        // For testing: show button if running on localhost or if no beforeinstallprompt fired
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            setTimeout(() => {
-                if (!this.deferredPrompt) {
-                    this.showInstallButton();
-                }
-            }, 2000); // Show after 2 seconds for testing
-        }
     }
 
-    // PWA Install methods
-    showInstallButton() {
-        const button = document.getElementById('install-button');
-        button.classList.remove('hidden');
+    // ─────────────────────────────────────────────
+    // LOCATION PANEL
+    // ─────────────────────────────────────────────
+    _toggleLocPanel() {
+        const p = this._getEl('loc-panel');
+        if (p) p.classList.toggle('hidden');
     }
 
-    hideInstallButton() {
-        const button = document.getElementById('install-button');
-        button.classList.add('hidden');
+    _closeLocPanel() {
+        this._getEl('loc-panel')?.classList.add('hidden');
     }
 
-    installApp() {
-        if (this.deferredPrompt) {
-            this.deferredPrompt.prompt();
-            this.deferredPrompt.userChoice.then((choiceResult) => {
-                if (choiceResult.outcome === 'accepted') {
-                    console.log('User accepted the install prompt');
-                } else {
-                    console.log('User dismissed the install prompt');
-                }
-                this.deferredPrompt = null;
-            });
-        } else {
-            // For testing purposes when no prompt is available
-            alert('Install prompt not available. In a real PWA, this would show the native install dialog.');
-            this.hideInstallButton();
-        }
+    _locErr(msg) {
+        const el = this._getEl('loc-err');
+        if (el) { el.textContent = msg; el.style.display = 'block'; }
     }
 
-    hideLoading() {
-        setTimeout(() => {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('main-content').classList.remove('opacity-0');
-            document.getElementById('main-content').classList.add('opacity-100');
-        }, 1000);
+    // ─────────────────────────────────────────────
+    // ERROR BANNER
+    // ─────────────────────────────────────────────
+    _showErr(msg) {
+        // Remove existing
+        document.querySelectorAll('.err-banner').forEach(e => e.remove());
+        const div = document.createElement('div');
+        div.className = 'err-banner';
+        div.innerHTML = `<i class="fas fa-triangle-exclamation" style="margin-top:2px;flex-shrink:0;"></i><span>${msg}</span><button onclick="this.closest('.err-banner').remove()" style="margin-left:auto;background:none;border:none;color:#fff;cursor:pointer;flex-shrink:0;">✕</button>`;
+        document.body.appendChild(div);
+        setTimeout(() => div.remove(), 7000);
     }
 
-    loadSettings() {
-        // Apply saved settings
-        document.getElementById('time-format').value = this.settings.timeFormat;
-        document.getElementById('calculation-method').value = this.settings.calculationMethod;
-
-        // Apply theme
-        if (this.settings.theme === 'dark') {
-            document.body.classList.add('dark');
-            document.getElementById('theme-toggle').innerHTML = '<i class="fas fa-sun mr-2"></i><span>Light Mode</span>';
-        } else {
-            document.body.classList.remove('dark');
-            document.getElementById('theme-toggle').innerHTML = '<i class="fas fa-moon mr-2"></i><span>Dark Mode</span>';
-        }
+    // ─────────────────────────────────────────────
+    // TOAST
+    // ─────────────────────────────────────────────
+    _showToast(msg) {
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2800);
     }
 
-    saveSettings() {
-        localStorage.setItem('timeFormat', this.settings.timeFormat);
-        localStorage.setItem('calculationMethod', this.settings.calculationMethod);
-        localStorage.setItem('theme', this.settings.theme);
-        localStorage.setItem('language', this.settings.language);
+    // ─────────────────────────────────────────────
+    // UTIL
+    // ─────────────────────────────────────────────
+    _setEl(id, val) {
+        const el = this._getEl(id);
+        if (el) el.textContent = val;
     }
 
-    toggleTheme() {
-        if (this.settings.theme === 'dark') {
-            this.settings.theme = 'light';
-            document.body.classList.remove('dark');
-            document.getElementById('theme-toggle').innerHTML = '<i class="fas fa-sun mr-2"></i><span>Light Mode</span>';
-        } else {
-            this.settings.theme = 'dark';
-            document.body.classList.add('dark');
-            document.getElementById('theme-toggle').innerHTML = '<i class="fas fa-moon mr-2"></i><span>Dark Mode</span>';
-        }
-        this.saveSettings();
-    }
-
-    async detectLocation() {
-        const locationDisplay = document.getElementById('current-location');
-        locationDisplay.textContent = 'Detecting location...';
-
-        // Show loading state on button
-        const detectButton = document.getElementById('detect-location');
-        const originalText = detectButton.innerHTML;
-        detectButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting...';
-        detectButton.disabled = true;
-
-        try {
-            if (!navigator.geolocation) {
-                throw new Error('Geolocation is not supported by this browser');
-            }
-
-            const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 300000
-                });
-            });
-
-            this.currentLocation = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                method: 'coordinates'
-            };
-
-            // Get location name from coordinates
-            await this.reverseGeocode(position.coords.latitude, position.coords.longitude);
-            await this.fetchPrayerTimes();
-
-        } catch (error) {
-            console.warn('Location detection failed:', error);
-
-            let errorMessage = 'Unable to detect your location. ';
-            if (error.code === 1) {
-                errorMessage += 'Please enable location permissions and try again.';
-            } else if (error.code === 2) {
-                errorMessage += 'Location information is unavailable.';
-            } else if (error.code === 3) {
-                errorMessage += 'Location request timed out.';
-            } else {
-                errorMessage += 'Using default location (Cairo, Egypt).';
-            }
-
-            this.showError(errorMessage);
-            // Fallback to default location
-            this.setDefaultLocation();
-        } finally {
-            // Reset button state
-            detectButton.innerHTML = originalText;
-            detectButton.disabled = false;
-        }
-    }
-
-    async reverseGeocode(lat, lng) {
-        try {
-            const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
-            const data = await response.json();
-
-            const city = data.city || data.locality || 'Unknown City';
-            const country = data.countryName || 'Unknown Country';
-
-            document.getElementById('current-location').textContent = `${city}, ${country}`;
-            document.getElementById('city-input').value = city;
-            document.getElementById('country-input').value = country;
-
-            // Update city suggestions for the detected country
-            this.updateCitySuggestions(country);
-
-        } catch (error) {
-            console.warn('Reverse geocoding failed:', error);
-            document.getElementById('current-location').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        }
-    }
-
-    setDefaultLocation() {
-        this.currentLocation = {
-            city: 'Cairo',
-            country: 'Egypt',
-            lat: 30.0444,
-            lng: 31.2357,
-            method: 'coordinates' // Use coordinates for better accuracy
+    _getEl(id) {
+        const aliases = {
+            'loc-label': ['current-location'],
+            'qibla-from': ['qibla-location'],
+            'qibla-deg': ['qibla-angle'],
+            'qibla-dir': ['qibla-direction'],
+            'needle-wrap': ['qibla-needle'],
+            'dbg-heading': ['debug-heading'],
+            'install-btn': ['install-button'],
+            'theme-btn': ['theme-toggle'],
+            'method-sel': ['calculation-method'],
+            'format-sel': ['time-format'],
+            'notif-offset-sel': ['notification-offset'],
+            'country-sel': ['country-input'],
+            'city-inp': ['city-input'],
+            'city-drop': ['city-suggestion-list'],
+            'search-btn': ['manual-location'],
+            'detect-btn': ['detect-location'],
+            'loc-btn': ['location-toggle'],
+            'loc-panel': ['location-settings'],
+            'next-name': ['next-prayer-name'],
+            'next-time': ['next-prayer-time'],
+            'mobile-reminder-name': ['mobile-reminder-name'],
+            'mobile-reminder-detail': ['mobile-reminder-detail'],
+            'mobile-reminder-countdown': ['mobile-reminder-countdown'],
+            'install-button-label': ['install-button-label']
         };
-        document.getElementById('current-location').textContent = 'Cairo, Egypt';
-        document.getElementById('city-input').value = 'Cairo';
-        document.getElementById('country-input').value = 'Egypt';
 
-        // Update city suggestions for Egypt
-        this.updateCitySuggestions('Egypt');
-
-        this.fetchPrayerTimes();
+        for (const candidate of [id, ...(aliases[id] || [])]) {
+            const el = document.getElementById(candidate);
+            if (el) return el;
+        }
+        return null;
     }
 
-    async searchByCity() {
-        const city = document.getElementById('city-input').value.trim();
-        const country = document.getElementById('country-input').value.trim();
-
-        if (!country) {
-            this.showError('Please select a country first');
-            return;
+    _extractHeading(e) {
+        if (typeof e.webkitCompassHeading === 'number' && !Number.isNaN(e.webkitCompassHeading)) {
+            return (e.webkitCompassHeading + 360) % 360;
         }
 
-        if (!city) {
-            this.showError('Please enter a city name');
-            return;
+        if (typeof e.alpha !== 'number' || Number.isNaN(e.alpha)) {
+            return null;
         }
 
-        // Show loading state
-        const searchButton = document.getElementById('manual-location');
-        const originalText = searchButton.innerHTML;
-        searchButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Searching...';
-        searchButton.disabled = true;
-
-        try {
-            this.currentLocation = {
-                city: city,
-                country: country || '', // Country is optional
-                method: 'city'
-            };
-
-            document.getElementById('current-location').textContent = `${city}${country ? ', ' + country : ''}`;
-
-            await this.fetchPrayerTimes();
-
-            // Success - hide location settings and show success message
-            document.getElementById('location-settings').classList.add('hidden');
-            document.getElementById('location-display').classList.remove('hidden');
-
-        } catch (error) {
-            console.error('Location search failed:', error);
-            this.showError('City not found. Please check the spelling and try again.');
-            // Reset to previous location if available
-            if (this.prayerTimes) {
-                // Keep current data, just show error
-            } else {
-                // No previous data, fallback to default
-                this.setDefaultLocation();
-            }
-        } finally {
-            // Reset button state
-            searchButton.innerHTML = originalText;
-            searchButton.disabled = false;
+        if (e.absolute === false && window.ondeviceorientationabsolute !== undefined) {
+            return null;
         }
+
+        return (360 - e.alpha + 360) % 360;
     }
 
-    async fetchPrayerTimes() {
-        if (!this.currentLocation) return;
-
-        try {
-            let url;
-            if (this.currentLocation.method === 'coordinates') {
-                url = `${this.apiBase}/timings/${Date.now() / 1000}?latitude=${this.currentLocation.lat}&longitude=${this.currentLocation.lng}&method=${this.settings.calculationMethod}`;
-            } else {
-                url = `${this.apiBase}/timingsByCity?city=${encodeURIComponent(this.currentLocation.city)}&country=${encodeURIComponent(this.currentLocation.country || '')}&method=${this.settings.calculationMethod}`;
-            }
-
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.code === 200) {
-                this.prayerTimes = data.data.timings;
-                this.updateDates(data.data.date);
-                this.updatePrayerTimesDisplay();
-                this.calculateNextPrayer();
-                this.startCountdown();
-            } else {
-                throw new Error(data.status || 'Location not found. Please check the city/country name.');
-            }
-
-        } catch (error) {
-            console.error('Failed to fetch prayer times:', error);
-
-            let errorMessage = 'Failed to load prayer times. ';
-            if (error.message.includes('Location not found') || error.message.includes('not found')) {
-                errorMessage += 'Please check the city/country name and try again.';
-            } else if (error.message.includes('fetch')) {
-                errorMessage += 'Please check your internet connection.';
-            } else {
-                errorMessage += 'Please try again later.';
-            }
-
-            this.showError(errorMessage);
-            throw error; // Re-throw so searchByCity can handle it
-        }
+    _shortestAngleDelta(from, to) {
+        return ((to - from + 540) % 360) - 180;
     }
 
-    updateDates(dateData) {
-        const gregorian = dateData.gregorian;
-        const hijri = dateData.hijri;
-
-        document.getElementById('gregorian-date').textContent =
-            `${gregorian.weekday.en}, ${gregorian.day} ${gregorian.month.en} ${gregorian.year}`;
-
-        document.getElementById('hijri-date').textContent =
-            `${hijri.day} ${hijri.month.en} ${hijri.year} AH`;
+    _isStandalone() {
+        return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
     }
 
-    updatePrayerTimesDisplay() {
-        if (!this.prayerTimes) return;
-
-        const prayers = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha', 'Imsak', 'Midnight', 'Firstthird', 'Lastthird'];
-
-        prayers.forEach(prayer => {
-            const time = this.prayerTimes[prayer];
-            if (time) {
-                const formattedTime = this.formatTime(time);
-                const element = document.getElementById(`${prayer.toLowerCase()}-time`);
-                if (element) {
-                    element.textContent = formattedTime;
-                }
-            }
-        });
-
-        // Update current prayer highlighting
-        this.updateCurrentPrayerHighlight();
+    _isIos() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     }
 
-    formatTime(timeString) {
-        if (this.settings.timeFormat === '12') {
-            const [hours, minutes] = timeString.split(':');
-            const hour = parseInt(hours);
-            const ampm = hour >= 12 ? 'PM' : 'AM';
-            const displayHour = hour % 12 || 12;
-            return `${displayHour}:${minutes} ${ampm}`;
-        }
-        return timeString;
-    }
-
-    updateCurrentPrayerHighlight() {
-        // Remove current class from all cards
-        document.querySelectorAll('.prayer-card').forEach(card => {
-            card.classList.remove('current');
-        });
-
-        if (this.nextPrayer && this.nextPrayer.name !== 'Next Day') {
-            const currentCard = document.querySelector(`[data-prayer="${this.nextPrayer.name}"]`);
-            if (currentCard) {
-                currentCard.classList.add('current');
-            }
-        }
-    }
-
-    calculateNextPrayer() {
-        if (!this.prayerTimes) return;
-
-        const now = new Date();
-        const currentTime = now.getHours() * 60 + now.getMinutes();
-
-        const prayers = [
-            { name: 'Fajr', time: this.prayerTimes.Fajr },
-            { name: 'Sunrise', time: this.prayerTimes.Sunrise },
-            { name: 'Dhuhr', time: this.prayerTimes.Dhuhr },
-            { name: 'Asr', time: this.prayerTimes.Asr },
-            { name: 'Maghrib', time: this.prayerTimes.Maghrib },
-            { name: 'Isha', time: this.prayerTimes.Isha }
-        ];
-
-        let nextPrayer = null;
-        let minDiff = Infinity;
-
-        for (const prayer of prayers) {
-            const [hours, minutes] = prayer.time.split(':').map(Number);
-            const prayerTime = hours * 60 + minutes;
-            let diff = prayerTime - currentTime;
-
-            // If prayer has passed today, add 24 hours for tomorrow
-            if (diff <= 0) {
-                diff += 24 * 60;
-            }
-
-            if (diff < minDiff) {
-                minDiff = diff;
-                nextPrayer = prayer;
-            }
-        }
-
-        if (nextPrayer) {
-            this.nextPrayer = {
-                name: nextPrayer.name,
-                time: nextPrayer.time,
-                minutesUntil: minDiff
-            };
-            this.updateNextPrayerDisplay();
-        } else {
-            // Fallback if no prayer found
-            this.nextPrayer = {
-                name: 'Fajr',
-                time: this.prayerTimes.Fajr,
-                minutesUntil: 0
-            };
-            this.updateNextPrayerDisplay();
-        }
-    }
-
-    updateNextPrayerDisplay() {
-        if (!this.nextPrayer) return;
-
-        document.getElementById('next-prayer-name').textContent = this.nextPrayer.name;
-        document.getElementById('next-prayer-time').textContent = this.formatTime(this.nextPrayer.time);
-    }
-
-    startCountdown() {
-        if (this.countdownInterval) {
-            clearInterval(this.countdownInterval);
-        }
-
-        this.countdownInterval = setInterval(() => {
-            if (!this.nextPrayer) return;
-
-            const now = new Date();
-            const currentTime = now.getHours() * 60 + now.getMinutes();
-            const [prayerHours, prayerMinutes] = this.nextPrayer.time.split(':').map(Number);
-            const prayerTime = prayerHours * 60 + prayerMinutes;
-
-            let minutesUntil = prayerTime - currentTime;
-            if (minutesUntil < 0) {
-                minutesUntil += 24 * 60; // Add 24 hours if prayer has passed
-            }
-
-            // Calculate exact time difference including seconds
-            const prayerDate = new Date();
-            prayerDate.setHours(prayerHours, prayerMinutes, 0, 0);
-
-            if (prayerDate < now) {
-                prayerDate.setDate(prayerDate.getDate() + 1);
-            }
-
-            const timeDiff = prayerDate - now;
-            const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-            const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
-
-            const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            document.getElementById('countdown').textContent = countdownText;
-
-            // If countdown reaches zero, recalculate next prayer
-            if (timeDiff <= 0) {
-                this.calculateNextPrayer();
-            }
-        }, 1000);
-    }
-
-    startCurrentTime() {
-        this.updateCurrentTime();
-        this.currentTimeInterval = setInterval(() => {
-            this.updateCurrentTime();
-        }, 1000);
-    }
-
-    updateCurrentTime() {
-        const now = new Date();
-        let timeString;
-
-        if (this.settings.timeFormat === '12') {
-            timeString = now.toLocaleTimeString('en-US', {
-                hour12: true,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-        } else {
-            timeString = now.toTimeString().split(' ')[0]; // HH:MM:SS format
-        }
-
-        document.getElementById('current-time').textContent = timeString;
-    }
-
-    showError(message) {
-        // Create or update error notification
-        let errorDiv = document.getElementById('error-notification');
-        if (!errorDiv) {
-            errorDiv = document.createElement('div');
-            errorDiv.id = 'error-notification';
-            errorDiv.className = 'fixed top-4 right-4 bg-red-500/90 backdrop-blur-md text-white px-4 py-3 rounded-lg border border-red-400/50 z-50 max-w-sm';
-            document.body.appendChild(errorDiv);
-        }
-
-        errorDiv.innerHTML = `
-            <div class="flex items-center">
-                <i class="fas fa-exclamation-triangle mr-2"></i>
-                <span>${message}</span>
-                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-red-200 hover:text-white">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        `;
-
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            if (errorDiv.parentElement) {
-                errorDiv.remove();
-            }
-        }, 5000);
-    }
-
-    showSearchHint() {
-        // Show a helpful hint when focusing on city input
-        let hintDiv = document.getElementById('search-hint');
-        if (!hintDiv) {
-            hintDiv = document.createElement('div');
-            hintDiv.id = 'search-hint';
-            hintDiv.className = 'mt-2 text-xs text-slate-400 bg-slate-800/30 rounded px-2 py-1';
-            document.getElementById('city-input').parentElement.appendChild(hintDiv);
-        }
-        const country = document.getElementById('country-input').value.trim();
-        hintDiv.textContent = country
-            ? `Type a city name in ${country} or choose from suggestions.`
-            : 'Please select a country first to enable city recommendations.';
-    }
-
-    updateSearchHint(value) {
-        const hintDiv = document.getElementById('search-hint');
-        if (!hintDiv) return;
-        const country = document.getElementById('country-input').value.trim();
-        if (!country) {
-            hintDiv.textContent = 'Select a country first to see city suggestions.';
-            return;
-        }
-        if (!value) {
-            hintDiv.textContent = `Recommended cities for ${country} appear below.`;
-        } else {
-            hintDiv.textContent = `Searching for “${value}” in ${country}. Choose a suggested city or continue typing.`;
-        }
-    }
-
-    setCityInputState(enabled) {
-        const cityInput = document.getElementById('city-input');
-        const recDiv = document.getElementById('city-recommendations');
-        if (!cityInput || !recDiv) return;
-        cityInput.disabled = !enabled;
-        cityInput.placeholder = enabled ? 'Choose a city in the selected country' : 'Select a country first to choose a city';
-        if (!enabled) {
-            cityInput.value = '';
-            recDiv.textContent = 'Choose a country first to see city recommendations.';
-            this.hideCitySuggestionList();
-        }
-    }
-
-    showRecommendations(country) {
-        const recDiv = document.getElementById('city-recommendations');
-        if (!recDiv) return;
-        if (!country) {
-            recDiv.textContent = 'Choose a country first to see city recommendations.';
-            return;
-        }
-        if (this.countryCities[country]) {
-            const topCities = this.countryCities[country].slice(0, 5).join(', ');
-            recDiv.textContent = `Recommended cities in ${country}: ${topCities}.`;
-        } else {
-            recDiv.textContent = `No built-in city recommendations for ${country}. Type your city name manually.`;
-        }
-    }
-
-    updateCitySuggestions(country) {
-        const cityDatalist = document.getElementById('city-suggestions');
-        const cityInput = document.getElementById('city-input');
-        if (!cityDatalist || !cityInput) return;
-
-        // Clear existing options
-        cityDatalist.innerHTML = '';
-
-        if (!country) {
-            this.setCityInputState(false);
-            return;
-        }
-
-        this.setCityInputState(true);
-        this.showRecommendations(country);
-
-        let cities;
-        if (this.countryCities[country]) {
-            cities = this.countryCities[country];
-            cities.forEach(city => {
-                const option = document.createElement('option');
-                option.value = city;
-                cityDatalist.appendChild(option);
-            });
-        } else {
-            cities = ['Cairo', 'Mecca', 'Medina', 'Istanbul', 'Dubai', 'London', 'New York', 'Paris', 'Tokyo', 'Mumbai'];
-            cities.forEach(city => {
-                const option = document.createElement('option');
-                option.value = city;
-                cityDatalist.appendChild(option);
-            });
-        }
-
-        this.renderCitySuggestionList(cities);
-        this.showCitySuggestionList();
-
-        // Clear the city input when country changes
-        cityInput.value = '';
-    }
-
-    showCitySuggestionList() {
-        const list = document.getElementById('city-suggestion-list');
-        if (!list || this.availableCities.length === 0) return;
-        list.classList.remove('hidden');
-    }
-
-    hideCitySuggestionList() {
-        const list = document.getElementById('city-suggestion-list');
-        if (list) {
-            list.classList.add('hidden');
-        }
-    }
-
-    filterCitySuggestions(query) {
-        const list = document.getElementById('city-suggestion-list');
-        if (!list) return;
-
-        const lowerQuery = query.trim().toLowerCase();
-        const items = Array.from(list.querySelectorAll('li'));
-        let visible = 0;
-
-        items.forEach(item => {
-            const city = item.dataset.city.toLowerCase();
-            const match = !lowerQuery || city.includes(lowerQuery);
-            item.classList.toggle('hidden', !match);
-            if (match) visible += 1;
-        });
-
-        if (visible === 0) {
-            list.classList.add('hidden');
-        } else {
-            list.classList.remove('hidden');
-        }
-    }
-
-    renderCitySuggestionList(cities) {
-        const list = document.getElementById('city-suggestion-list');
-        if (!list) return;
-
-        this.availableCities = cities || [];
-        list.innerHTML = '';
-
-        if (!this.availableCities.length) {
-            list.classList.add('hidden');
-            return;
-        }
-
-        this.availableCities.forEach(city => {
-            const item = document.createElement('li');
-            item.dataset.city = city;
-            item.className = 'cursor-pointer px-3 py-2 text-sm text-slate-100 hover:bg-islamic-green/20';
-            item.textContent = city;
-            list.appendChild(item);
-        });
-
-        list.classList.add('hidden');
+    _isMobileViewport() {
+        return window.matchMedia?.('(max-width: 768px)').matches ?? window.innerWidth <= 768;
     }
 }
 
-// Initialize the app when DOM is loaded
+// ─── Boot ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    new PrayerTimesApp();
+    // Hide loading and show app after a short moment
+    const loading = document.getElementById('loading');
+    const app = document.getElementById('main-content');
+
+    new IslamTimes();
+
+    // Fade out loading screen
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const revealDelay = isAndroid ? 120 : 260;
+
+    setTimeout(() => {
+        if (app) { app.style.opacity = '1'; }
+        if (loading) {
+            loading.style.opacity = '0';
+            loading.style.pointerEvents = 'none';
+        }
+        setTimeout(() => loading?.remove(), 500);
+    }, revealDelay);
 });
 
-// PWA Service Worker Registration
+// ─── Service Worker registration ──────────────────────────────────────
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
+        const isAndroidApp = typeof window.AndroidApp !== 'undefined' || /PrayerTimesAndroidApp/i.test(navigator.userAgent || '');
+        if (isAndroidApp) return;
+
         navigator.serviceWorker.register('sw.js')
-            .then(registration => {
-                console.log('SW registered: ', registration);
-            })
-            .catch(registrationError => {
-                console.log('SW registration failed: ', registrationError);
-            });
+            .then(r => console.log('SW registered:', r.scope))
+            .catch(e => console.log('SW error:', e));
     });
 }

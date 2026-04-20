@@ -1,89 +1,69 @@
-// Service Worker for PrayerTimes PWA
-const CACHE_NAME = 'prayertimes-v1.0.0';
-const urlsToCache = [
-    '/',
-    '/index.html',
-    '/style.css',
-    '/script.js',
-    '/manifest.json'
-];
+/**
+ * Islam Times — Service Worker
+ * Caches core assets for offline use (cache-first strategy for app shell,
+ * network-first for API calls so prayer times always stay fresh).
+ */
 
-// Install event - cache resources
-self.addEventListener('install', event => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => {
-                return cache.addAll(urlsToCache);
-            })
+const CACHE = 'islamtimes-v3';
+const SHELL = ['/', '/index.html', '/style.css', '/script.js', '/manifest.json', '/icons/app-icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+
+// ─── Install: pre-cache app shell ──────────────────────────────────────
+self.addEventListener('install', e => {
+    e.waitUntil(
+        caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
     );
-    self.skipWaiting();
 });
 
-// Activate event - clean up old caches
-self.addEventListener('activate', event => {
-    event.waitUntil(
-        caches.keys().then(cacheNames => {
-            return Promise.all(
-                cacheNames.map(cacheName => {
-                    if (cacheName !== CACHE_NAME) {
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
+// ─── Activate: remove old caches ───────────────────────────────────────
+self.addEventListener('activate', e => {
+    e.waitUntil(
+        caches.keys()
+            .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+            .then(() => self.clients.claim())
+    );
+});
+
+// ─── Fetch: network-first for API, cache-first for assets ─────────────
+self.addEventListener('fetch', e => {
+    if (e.request.method !== 'GET') return;
+
+    const url = new URL(e.request.url);
+
+    // API calls: always try network first, no caching
+    if (url.hostname.includes('aladhan.com') ||
+        url.hostname.includes('bigdatacloud.net') ||
+        url.hostname.includes('open-meteo.com')) {
+        e.respondWith(fetch(e.request).catch(() => new Response('', { status: 503 })));
+        return;
+    }
+
+    // CDN (fonts, icons): cache-first
+    if (url.hostname.includes('fonts.') || url.hostname.includes('cdnjs.') || url.hostname.includes('cdn.tailwind')) {
+        e.respondWith(
+            caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+                const copy = res.clone();
+                caches.open(CACHE).then(c => c.put(e.request, copy));
+                return res;
+            }))
+        );
+        return;
+    }
+
+    // App shell: cache-first, fallback to index.html for navigation
+    e.respondWith(
+        caches.match(e.request).then(cached => {
+            if (cached) return cached;
+            return fetch(e.request).then(res => {
+                if (res.ok) {
+                    const copy = res.clone();
+                    caches.open(CACHE).then(c => c.put(e.request, copy));
+                }
+                return res;
+            }).catch(() => {
+                if (e.request.headers.get('accept')?.includes('text/html')) {
+                    return caches.match('/index.html');
+                }
+            });
         })
     );
-    self.clients.claim();
 });
-
-// Fetch event - serve from cache when offline
-self.addEventListener('fetch', event => {
-    // Only cache GET requests
-    if (event.request.method !== 'GET') return;
-
-    // Skip cross-origin requests
-    if (!event.request.url.startsWith(self.location.origin)) return;
-
-    event.respondWith(
-        caches.match(event.request)
-            .then(response => {
-                // Return cached version or fetch from network
-                return response || fetch(event.request)
-                    .then(response => {
-                        // Don't cache if not a valid response
-                        if (!response || response.status !== 200 || response.type !== 'basic') {
-                            return response;
-                        }
-
-                        // Clone the response
-                        const responseToCache = response.clone();
-
-                        // Cache the fetched response
-                        caches.open(CACHE_NAME)
-                            .then(cache => {
-                                cache.put(event.request, responseToCache);
-                            });
-
-                        return response;
-                    })
-                    .catch(() => {
-                        // Return offline fallback for HTML requests
-                        if (event.request.headers.get('accept').includes('text/html')) {
-                            return caches.match('/index.html');
-                        }
-                    });
-            })
-    );
-});
-
-// Background sync for prayer times updates (if supported)
-self.addEventListener('sync', event => {
-    if (event.tag === 'prayer-times-update') {
-        event.waitUntil(updatePrayerTimes());
-    }
-});
-
-async function updatePrayerTimes() {
-    // This would update prayer times in the background
-    // For now, just log that sync occurred
-    console.log('Background sync: updating prayer times');
-}
