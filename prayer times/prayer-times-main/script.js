@@ -130,7 +130,8 @@ class IslamTimes {
         this._startEventCountdowns();
 
         if (!this._isAndroidApp() && 'serviceWorker' in navigator) {
-            navigator.serviceWorker.ready
+            const swUrl = new URL('./sw.js', window.location.href);
+            navigator.serviceWorker.register(swUrl.href, { scope: './' })
                 .then(reg => {
                     this._swRegistration = reg;
                 })
