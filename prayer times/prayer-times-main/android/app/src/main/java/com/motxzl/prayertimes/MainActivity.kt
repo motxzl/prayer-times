@@ -1,7 +1,12 @@
 package com.motxzl.prayertimes
 
 import android.Manifest
+import android.app.AlarmManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -19,8 +24,10 @@ import android.widget.Toast
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.webkit.WebViewAssetLoader
+import org.json.JSONArray
 
 class MainActivity : AppCompatActivity() {
     private lateinit var assetLoader: WebViewAssetLoader
@@ -28,6 +35,14 @@ class MainActivity : AppCompatActivity() {
 
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                Toast.makeText(this, R.string.notification_permission_denied, Toast.LENGTH_LONG).show()
+            }
+            webView.evaluateJavascript("if (window.updateAlertsBadge) window.updateAlertsBadge();", null)
+        }
 
     private val locationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -62,6 +77,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContentView(webView)
+        createNotificationChannel()
         configureWebView()
 
         onBackPressedDispatcher.addCallback(this) {
@@ -211,13 +227,125 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private class AndroidAppBridge {
+    private fun hasNotificationPermission(): Boolean {
+        val runtimePermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+        return runtimePermissionGranted && NotificationManagerCompat.from(this).areNotificationsEnabled()
+    }
+
+    private fun requestNotificationPermission(): Boolean {
+        if (hasNotificationPermission()) return true
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            runOnUiThread {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            return true
+        }
+
+        return false
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+        val channel = NotificationChannel(
+            PrayerReminderReceiver.CHANNEL_ID,
+            getString(R.string.notification_channel_name),
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = getString(R.string.notification_channel_description)
+        }
+
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+
+    private fun schedulePrayerReminders(remindersJson: String) {
+        cancelPrayerReminders()
+
+        val reminders = runCatching { JSONArray(remindersJson) }.getOrNull() ?: return
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+        for (index in 0 until reminders.length()) {
+            val reminder = reminders.optJSONObject(index) ?: continue
+            val triggerAt = reminder.optLong("triggerAt", 0L)
+            if (triggerAt <= System.currentTimeMillis()) continue
+
+            val intent = Intent(this, PrayerReminderReceiver::class.java).apply {
+                putExtra(PrayerReminderReceiver.EXTRA_PRAYER_NAME, reminder.optString("name"))
+                putExtra(PrayerReminderReceiver.EXTRA_PRAYER_TIME, reminder.optString("time"))
+                putExtra(PrayerReminderReceiver.EXTRA_OFFSET, reminder.optInt("offset", 10))
+                putExtra(PrayerReminderReceiver.EXTRA_SOUND, reminder.optBoolean("sound", true))
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                this,
+                REMINDER_REQUEST_CODE_BASE + index,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        }
+    }
+
+    private fun cancelPrayerReminders() {
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        for (index in 0 until MAX_REMINDER_ALARMS) {
+            val pendingIntent = PendingIntent.getBroadcast(
+                this,
+                REMINDER_REQUEST_CODE_BASE + index,
+                Intent(this, PrayerReminderReceiver::class.java),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            ) ?: continue
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+    }
+
+    private fun showTestNotification() {
+        val intent = Intent(this, PrayerReminderReceiver::class.java).apply {
+            putExtra(PrayerReminderReceiver.EXTRA_TITLE, getString(R.string.test_notification_title))
+            putExtra(PrayerReminderReceiver.EXTRA_BODY, getString(R.string.test_notification_body))
+            putExtra(PrayerReminderReceiver.EXTRA_SOUND, true)
+        }
+        sendBroadcast(intent)
+    }
+
+    private inner class AndroidAppBridge {
         @JavascriptInterface
         fun isAndroidApp(): Boolean = true
+
+        @JavascriptInterface
+        fun areNotificationsAllowed(): Boolean = hasNotificationPermission()
+
+        @JavascriptInterface
+        fun requestNotifications(): Boolean = requestNotificationPermission()
+
+        @JavascriptInterface
+        fun schedulePrayerReminders(remindersJson: String) {
+            this@MainActivity.schedulePrayerReminders(remindersJson)
+        }
+
+        @JavascriptInterface
+        fun cancelPrayerReminders() {
+            this@MainActivity.cancelPrayerReminders()
+        }
+
+        @JavascriptInterface
+        fun showTestNotification() {
+            this@MainActivity.showTestNotification()
+        }
     }
 
     companion object {
         private const val APP_ASSET_HOST = "appassets.androidplatform.net"
         private const val APP_URL = "https://$APP_ASSET_HOST/assets/index.html"
+        private const val REMINDER_REQUEST_CODE_BASE = 7100
+        private const val MAX_REMINDER_ALARMS = 8
     }
 }

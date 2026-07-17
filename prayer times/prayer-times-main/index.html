@@ -105,39 +105,39 @@
             </div>
             <p class="text-slate-400 text-lg mb-6 font-arabic">Islamic Prayer Times</p>
 
-            <!-- Date Display -->
-            <div class="bg-white/5 backdrop-blur-xl rounded-3xl p-6 mb-6 border border-white/10 shadow-2xl">
-                <div class="flex flex-col md:flex-row items-center justify-between">
-                    <div class="text-center md:text-left mb-4 md:mb-0">
-                        <p class="text-sm text-slate-400 mb-1">Gregorian Date</p>
-                        <p class="text-lg font-semibold text-islamic-green font-arabic" id="gregorian-date">Loading date...</p>
-                        <p class="text-sm text-slate-400 mt-2">Hijri Date</p>
-                        <p class="text-xl font-bold text-emerald-300 font-arabic" id="hijri-date">Loading Hijri date...</p>
+            <!-- Next Prayer Countdown -->
+            <div id="countdown-section" class="scroll-mt-24 bg-gradient-to-r from-islamic-green/10 via-emerald-600/10 to-teal-500/10 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-islamic-green/20 shadow-2xl animate-fade-in">
+                <div class="text-center">
+                    <div class="flex items-center justify-center mb-4">
+                        <i class="fas fa-clock text-islamic-green text-2xl mr-3"></i>
+                        <h3 class="text-2xl font-bold font-arabic">Next Prayer</h3>
                     </div>
-                    <div class="text-center md:text-right">
-                        <p class="text-sm text-slate-400 mb-1">Current Time</p>
-                        <p class="text-3xl md:text-4xl font-mono font-bold text-white" id="current-time">--:--</p>
-                        <div class="flex items-center justify-center mt-2">
-                            <i class="fas fa-clock text-islamic-green mr-2"></i>
-                            <span class="text-xs text-slate-400">Live</span>
-                        </div>
+                    <p class="text-3xl md:text-4xl font-bold text-islamic-green mb-4 font-arabic" id="next-prayer-name">Loading...</p>
+                    <p class="text-5xl md:text-7xl font-mono font-bold mb-6 text-white drop-shadow-lg" id="countdown">00:00:00</p>
+                    <div class="flex items-center justify-center">
+                        <i class="fas fa-calendar-alt text-slate-400 mr-2"></i>
+                        <p class="text-slate-300 text-lg font-arabic" id="next-prayer-time">Time loading...</p>
                     </div>
                 </div>
             </div>
         </header>
 
-        <!-- Next Prayer Countdown -->
-        <div id="countdown-section" class="scroll-mt-24 bg-gradient-to-r from-islamic-green/10 via-emerald-600/10 to-teal-500/10 backdrop-blur-xl rounded-3xl p-8 mb-8 border border-islamic-green/20 shadow-2xl animate-fade-in">
-            <div class="text-center">
-                <div class="flex items-center justify-center mb-4">
-                    <i class="fas fa-clock text-islamic-green text-2xl mr-3"></i>
-                    <h3 class="text-2xl font-bold font-arabic">Next Prayer</h3>
+        <!-- Date Display -->
+        <div class="bg-white/5 backdrop-blur-xl rounded-3xl p-6 mb-8 border border-white/10 shadow-2xl animate-fade-in">
+            <div class="flex flex-col md:flex-row items-center justify-between">
+                <div class="text-center md:text-left mb-4 md:mb-0">
+                    <p class="text-sm text-slate-400 mb-1">Gregorian Date</p>
+                    <p class="text-lg font-semibold text-islamic-green font-arabic" id="gregorian-date">Loading date...</p>
+                    <p class="text-sm text-slate-400 mt-2">Hijri Date</p>
+                    <p class="text-xl font-bold text-emerald-300 font-arabic" id="hijri-date">Loading Hijri date...</p>
                 </div>
-                <p class="text-3xl md:text-4xl font-bold text-islamic-green mb-4 font-arabic" id="next-prayer-name">Loading...</p>
-                <p class="text-5xl md:text-7xl font-mono font-bold mb-6 text-white drop-shadow-lg" id="countdown">00:00:00</p>
-                <div class="flex items-center justify-center">
-                    <i class="fas fa-calendar-alt text-slate-400 mr-2"></i>
-                    <p class="text-slate-300 text-lg font-arabic" id="next-prayer-time">Time loading...</p>
+                <div class="text-center md:text-right">
+                    <p class="text-sm text-slate-400 mb-1">Current Time</p>
+                    <p class="text-3xl md:text-4xl font-mono font-bold text-white" id="current-time">--:--</p>
+                    <div class="flex items-center justify-center mt-2">
+                        <i class="fas fa-clock text-islamic-green mr-2"></i>
+                        <span class="text-xs text-slate-400">Live</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -476,6 +476,10 @@
             <div class="mt-4 rounded-2xl border border-white/10 bg-slate-900/30 p-4">
                 <p class="text-sm text-slate-300">Permission</p>
                 <p id="alerts-permission" class="mt-1 text-xs text-slate-400">Checking browser notification permission...</p>
+                <button id="test-notification-button" type="button" class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-medium text-emerald-100 transition-all duration-150 hover:bg-emerald-500/25 active:scale-[0.99]">
+                    <i class="fas fa-bell"></i>
+                    <span>Test Notification</span>
+                </button>
             </div>
         </section>
 
@@ -619,8 +623,8 @@
                 <span class="pointer-events-none absolute inset-x-2 inset-y-1 rounded-2xl bg-emerald-400/12 opacity-0 blur-md transition-all duration-150"></span>
                 <span class="relative flex flex-col items-center justify-center gap-0.5">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.75 4.75a.75.75 0 0 1 1.5 0v1.1a6.04 6.04 0 0 1 1.58.57l.78-.78a.75.75 0 0 1 1.06 1.06l-.78.78c.25.49.44 1.02.57 1.58h1.1a.75.75 0 0 1 0 1.5h-1.1c-.13.56-.32 1.09-.57 1.58l.78.78a.75.75 0 1 1-1.06 1.06l-.78-.78a6.04 6.04 0 0 1-1.58.57v1.1a.75.75 0 0 1-1.5 0v-1.1a6.04 6.04 0 0 1-1.58-.57l-.78.78a.75.75 0 1 1-1.06-1.06l.78-.78a6.04 6.04 0 0 1-.57-1.58H4.75a.75.75 0 0 1 0-1.5h1.1c.13-.56.32-1.09.57-1.58l-.78-.78a.75.75 0 0 1 1.06-1.06l.78.78c.49-.25 1.02-.44 1.58-.57V4.75Z"></path>
-                        <circle cx="12" cy="12" r="2.75"></circle>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.59 4.58 10.2 3h3.6l.61 1.58a1.5 1.5 0 0 0 1.8.91l1.62-.42 1.8 3.12-1.14 1.2a1.5 1.5 0 0 0 0 2.22l1.14 1.2-1.8 3.12-1.62-.42a1.5 1.5 0 0 0-1.8.91L13.8 18h-3.6l-.61-1.58a1.5 1.5 0 0 0-1.8-.91l-1.62.42-1.8-3.12 1.14-1.2a1.5 1.5 0 0 0 0-2.22l-1.14-1.2 1.8-3.12 1.62.42a1.5 1.5 0 0 0 1.8-.91Z"></path>
+                        <circle cx="12" cy="10.5" r="2.8"></circle>
                     </svg>
                     <span class="text-[11px] font-medium leading-none">Settings</span>
                 </span>
@@ -660,7 +664,10 @@
             const permission = document.getElementById('alerts-permission');
             const pill = document.getElementById('alerts-status-pill');
             const notificationsEnabled = localStorage.getItem('it_notifs') === 'true';
-            const state = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+            const isAndroidApp = typeof window.AndroidApp !== 'undefined';
+            const state = isAndroidApp
+                ? (window.AndroidApp.areNotificationsAllowed?.() ? 'granted' : 'default')
+                : (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
 
             if (badge) {
                 const shouldShow = !notificationsEnabled || state !== 'granted';
@@ -682,7 +689,7 @@
             if (permission) {
                 if (state === 'granted') permission.textContent = 'Notifications are allowed in this browser.';
                 else if (state === 'denied') permission.textContent = 'Notifications are blocked. Enable them in browser settings.';
-                else if (state === 'default') permission.textContent = 'Notifications are available and will ask for permission when enabled.';
+                else if (state === 'default') permission.textContent = isAndroidApp ? 'Android will ask for notification permission when alerts are enabled.' : 'Notifications are available and will ask for permission when enabled.';
                 else permission.textContent = 'This browser does not support notifications.';
             }
         }
