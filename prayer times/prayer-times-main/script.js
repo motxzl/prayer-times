@@ -110,7 +110,7 @@ class IslamTimes {
         this._eventsInterval = null;
         this._swRegistration = null;
         this._audioCtx = null;
-        this._installButtonTouchBound = false;
+        this._installing = false;
 
         this.init();
     }
@@ -564,6 +564,10 @@ class IslamTimes {
     // NOTIFICATIONS
     // ─────────────────────────────────────────────
     async _requestNotifPermission() {
+        if (this._isAndroidApp() && window.AndroidApp?.requestNotifications) {
+            return window.AndroidApp.requestNotifications();
+        }
+
         if (!('Notification' in window)) {
             this._showErr('Your browser does not support notifications.'); return false;
         }
@@ -586,6 +590,43 @@ class IslamTimes {
         this._updateNotifToggle();
         if (this.s.notifs && this.times) this._scheduleNotifications();
         else this._clearNotifTimers();
+    }
+
+    async _sendTestNotification() {
+        const ok = await this._requestNotifPermission();
+        if (!ok) {
+            if (typeof window.updateAlertsBadge === 'function') window.updateAlertsBadge();
+            this._showErr('Please allow notifications in your browser settings.');
+            return;
+        }
+
+        const title = 'PrayerTimes Test Notification';
+        const body = 'Notifications are working for prayer reminders.';
+
+        if (this._isAndroidApp() && window.AndroidApp?.showTestNotification) {
+            window.AndroidApp.showTestNotification();
+            this._showToast('Test notification sent.');
+            if (typeof window.updateAlertsBadge === 'function') window.updateAlertsBadge();
+            return;
+        }
+
+        const payload = {
+            body,
+            icon: 'icons/icon-192.png',
+            badge: 'icons/icon-192.png',
+            tag: 'prayer-test-notification',
+            silent: !this.s.notifSound
+        };
+
+        if (this._swRegistration?.showNotification) {
+            await this._swRegistration.showNotification(title, payload);
+        } else {
+            new Notification(title, payload);
+        }
+
+        if (this.s.notifSound) this._playNotifSound();
+        this._showToast('Test notification sent.');
+        if (typeof window.updateAlertsBadge === 'function') window.updateAlertsBadge();
     }
 
     _updateNotifToggle() {
@@ -696,6 +737,7 @@ class IslamTimes {
         if (!this.times || !this.s.notifs) return;
         const now = new Date();
         const offsetMs = this.s.notifOffset * 60000;
+        const nativeReminders = [];
 
         for (const name of MAIN_PRAYERS) {
             const raw = this.times[name];
@@ -707,6 +749,18 @@ class IslamTimes {
             let diff = target - now;
             if (diff <= 0) diff += 86400000;
             if (diff > 0 && diff < 86400000) {
+                nativeReminders.push({
+                    name,
+                    time: this._fmt(raw),
+                    offset: this.s.notifOffset,
+                    triggerAt: now.getTime() + diff,
+                    sound: this.s.notifSound
+                });
+
+                if (this._isAndroidApp() && window.AndroidApp?.schedulePrayerReminders) {
+                    continue;
+                }
+
                 const t = setTimeout(() => {
                     if (Notification.permission === 'granted') {
                         const shouldPlaySound = this.s.notifSound;
@@ -730,11 +784,18 @@ class IslamTimes {
                 this._notifTimers.push(t);
             }
         }
+
+        if (this._isAndroidApp() && window.AndroidApp?.schedulePrayerReminders) {
+            window.AndroidApp.schedulePrayerReminders(JSON.stringify(nativeReminders));
+        }
     }
 
     _clearNotifTimers() {
         this._notifTimers.forEach(t => clearTimeout(t));
         this._notifTimers = [];
+        if (this._isAndroidApp() && window.AndroidApp?.cancelPrayerReminders) {
+            window.AndroidApp.cancelPrayerReminders();
+        }
     }
 
     _playNotifSound() {
@@ -912,48 +973,52 @@ class IslamTimes {
             return;
         }
 
-        if (!this._isMobileViewport()) {
-            this._showInstallBtn();
-            return;
-        }
-
-        this._updateInstallButtonLabel();
-        this._showInstallBtn();
+        const canInstall = Boolean(this._pwaPrompt);
+        const canGuideIos = this._isIos() && this._isMobileViewport();
+        if (canInstall || canGuideIos) this._showInstallBtn();
+        else this._hideInstallBtn();
     }
 
     async _installApp() {
-        if (this._isAndroidApp()) {
-            this._showToast('This APK is already installed on your phone.');
-            this._hideInstallBtn();
-            return;
-        }
+        if (this._installing) return;
+        this._installing = true;
 
-        if (this._isStandalone()) {
-            this._showToast('The app is already installed.');
-            this._hideInstallBtn();
-            return;
-        }
+        try {
+            if (this._isAndroidApp()) {
+                this._showToast('This APK is already installed on your phone.');
+                this._hideInstallBtn();
+                return;
+            }
 
-        if (this._pwaPrompt) {
-            this._pwaPrompt.prompt();
-            const { outcome } = await this._pwaPrompt.userChoice;
-            if (outcome === 'accepted') this._hideInstallBtn();
-            this._pwaPrompt = null;
-            this._updateInstallButtonLabel();
-            return;
-        }
+            if (this._isStandalone()) {
+                this._showToast('The app is already installed.');
+                this._hideInstallBtn();
+                return;
+            }
 
-        if (this._isIos()) {
-            this._showToast('On iPhone: tap Share, then Add to Home Screen.');
-            return;
-        }
+            if (this._pwaPrompt) {
+                this._pwaPrompt.prompt();
+                const { outcome } = await this._pwaPrompt.userChoice;
+                if (outcome === 'accepted') this._hideInstallBtn();
+                this._pwaPrompt = null;
+                this._updateInstallButtonLabel();
+                return;
+            }
 
-        if (this._isMobileViewport()) {
-            this._showToast('Open the browser menu and choose Install app or Add to Home screen.');
-            return;
-        }
+            if (this._isIos()) {
+                this._showToast('On iPhone: tap Share, then Add to Home Screen.');
+                return;
+            }
 
-        this._showToast('Use your browser menu to install this app.');
+            if (this._isMobileViewport()) {
+                this._showToast('Open the browser menu and choose Install app or Add to Home screen.');
+                return;
+            }
+
+            this._showToast('Use your browser menu to install this app.');
+        } finally {
+            this._installing = false;
+        }
     }
 
     _updateInstallButtonLabel() {
@@ -1047,6 +1112,7 @@ class IslamTimes {
 
         // In-settings toggles (duplicate of header for convenience)
         document.getElementById('notif-row')?.addEventListener('click', () => this._toggleNotifs());
+        document.getElementById('test-notification-button')?.addEventListener('click', () => this._sendTestNotification());
         document.getElementById('theme-row')?.addEventListener('click', () => this._toggleTheme());
 
         // PWA install
@@ -1061,13 +1127,6 @@ class IslamTimes {
         });
         const installBtn = this._getEl('install-btn');
         installBtn?.addEventListener('click', () => this._installApp());
-        if (installBtn && !this._installButtonTouchBound) {
-            installBtn.addEventListener('touchend', (event) => {
-                event.preventDefault();
-                this._installApp();
-            }, { passive: false });
-            this._installButtonTouchBound = true;
-        }
 
         window.addEventListener('load', () => this._syncInstallButtonVisibility(), { once: true });
         window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change', () => this._syncInstallButtonVisibility());
