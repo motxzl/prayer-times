@@ -115,10 +115,6 @@ class IslamTimes {
         this.init();
     }
 
-    _isAndroidApp() {
-        return typeof window.AndroidApp !== 'undefined' || /PrayerTimesAndroidApp/i.test(navigator.userAgent || '');
-    }
-
     // ─────────────────────────────────────────────
     // INIT
     // ─────────────────────────────────────────────
@@ -129,7 +125,7 @@ class IslamTimes {
         this._startClock();
         this._startEventCountdowns();
 
-        if (!this._isAndroidApp() && 'serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator) {
             const swUrl = new URL('./sw.js', window.location.href);
             navigator.serviceWorker.register(swUrl.href, { scope: './' })
                 .then(reg => {
@@ -564,10 +560,6 @@ class IslamTimes {
     // NOTIFICATIONS
     // ─────────────────────────────────────────────
     async _requestNotifPermission() {
-        if (this._isAndroidApp() && window.AndroidApp?.requestNotifications) {
-            return window.AndroidApp.requestNotifications();
-        }
-
         if (!('Notification' in window)) {
             this._showErr('Your browser does not support notifications.'); return false;
         }
@@ -602,13 +594,6 @@ class IslamTimes {
 
         const title = 'PrayerTimes Test Notification';
         const body = 'Notifications are working for prayer reminders.';
-
-        if (this._isAndroidApp() && window.AndroidApp?.showTestNotification) {
-            window.AndroidApp.showTestNotification();
-            this._showToast('Test notification sent.');
-            if (typeof window.updateAlertsBadge === 'function') window.updateAlertsBadge();
-            return;
-        }
 
         const payload = {
             body,
@@ -737,7 +722,6 @@ class IslamTimes {
         if (!this.times || !this.s.notifs) return;
         const now = new Date();
         const offsetMs = this.s.notifOffset * 60000;
-        const nativeReminders = [];
 
         for (const name of MAIN_PRAYERS) {
             const raw = this.times[name];
@@ -749,18 +733,6 @@ class IslamTimes {
             let diff = target - now;
             if (diff <= 0) diff += 86400000;
             if (diff > 0 && diff < 86400000) {
-                nativeReminders.push({
-                    name,
-                    time: this._fmt(raw),
-                    offset: this.s.notifOffset,
-                    triggerAt: now.getTime() + diff,
-                    sound: this.s.notifSound
-                });
-
-                if (this._isAndroidApp() && window.AndroidApp?.schedulePrayerReminders) {
-                    continue;
-                }
-
                 const t = setTimeout(() => {
                     if (Notification.permission === 'granted') {
                         const shouldPlaySound = this.s.notifSound;
@@ -784,18 +756,11 @@ class IslamTimes {
                 this._notifTimers.push(t);
             }
         }
-
-        if (this._isAndroidApp() && window.AndroidApp?.schedulePrayerReminders) {
-            window.AndroidApp.schedulePrayerReminders(JSON.stringify(nativeReminders));
-        }
     }
 
     _clearNotifTimers() {
         this._notifTimers.forEach(t => clearTimeout(t));
         this._notifTimers = [];
-        if (this._isAndroidApp() && window.AndroidApp?.cancelPrayerReminders) {
-            window.AndroidApp.cancelPrayerReminders();
-        }
     }
 
     _playNotifSound() {
@@ -952,7 +917,7 @@ class IslamTimes {
     // ─────────────────────────────────────────────
     _showInstallBtn() {
         const btn = this._getEl('install-btn');
-        if (!btn || this._isStandalone() || this._isAndroidApp()) return;
+        if (!btn || this._isStandalone()) return;
         this._updateInstallButtonLabel();
         btn.classList.remove('hidden');
         btn.classList.add('flex');
@@ -968,7 +933,7 @@ class IslamTimes {
     }
 
     _syncInstallButtonVisibility() {
-        if (this._isStandalone() || this._isAndroidApp()) {
+        if (this._isStandalone()) {
             this._hideInstallBtn();
             return;
         }
@@ -984,12 +949,6 @@ class IslamTimes {
         this._installing = true;
 
         try {
-            if (this._isAndroidApp()) {
-                this._showToast('This APK is already installed on your phone.');
-                this._hideInstallBtn();
-                return;
-            }
-
             if (this._isStandalone()) {
                 this._showToast('The app is already installed.');
                 this._hideInstallBtn();
@@ -1271,10 +1230,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     new IslamTimes();
 
-    // Fade out loading screen
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const revealDelay = isAndroid ? 120 : 260;
-
     setTimeout(() => {
         if (app) { app.style.opacity = '1'; }
         if (loading) {
@@ -1282,17 +1237,5 @@ document.addEventListener('DOMContentLoaded', () => {
             loading.style.pointerEvents = 'none';
         }
         setTimeout(() => loading?.remove(), 500);
-    }, revealDelay);
+    }, 260);
 });
-
-// ─── Service Worker registration ──────────────────────────────────────
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        const isAndroidApp = typeof window.AndroidApp !== 'undefined' || /PrayerTimesAndroidApp/i.test(navigator.userAgent || '');
-        if (isAndroidApp) return;
-
-        navigator.serviceWorker.register('sw.js')
-            .then(r => console.log('SW registered:', r.scope))
-            .catch(e => console.log('SW error:', e));
-    });
-}

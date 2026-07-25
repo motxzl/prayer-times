@@ -664,10 +664,7 @@
             const permission = document.getElementById('alerts-permission');
             const pill = document.getElementById('alerts-status-pill');
             const notificationsEnabled = localStorage.getItem('it_notifs') === 'true';
-            const isAndroidApp = typeof window.AndroidApp !== 'undefined';
-            const state = isAndroidApp
-                ? (window.AndroidApp.areNotificationsAllowed?.() ? 'granted' : 'default')
-                : (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+            const state = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
 
             if (badge) {
                 const shouldShow = !notificationsEnabled || state !== 'granted';
@@ -689,7 +686,7 @@
             if (permission) {
                 if (state === 'granted') permission.textContent = 'Notifications are allowed in this browser.';
                 else if (state === 'denied') permission.textContent = 'Notifications are blocked. Enable them in browser settings.';
-                else if (state === 'default') permission.textContent = isAndroidApp ? 'Android will ask for notification permission when alerts are enabled.' : 'Notifications are available and will ask for permission when enabled.';
+                else if (state === 'default') permission.textContent = 'Notifications are available and will ask for permission when enabled.';
                 else permission.textContent = 'This browser does not support notifications.';
             }
         }

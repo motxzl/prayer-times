@@ -71,7 +71,7 @@ Thank you for your interest in contributing to PrayerTimes! We welcome contribut
 
 Before submitting a PR:
 1. Test on multiple browsers (Chrome, Firefox, Safari)
-2. Test on mobile devices (iOS and Android)
+2. Test on mobile browsers and responsive viewport sizes
 3. Test offline functionality (Service Worker)
 4. Check PWA installation works
 5. Verify all prayer times calculations
