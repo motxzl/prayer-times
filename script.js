@@ -320,58 +320,85 @@ class PrayerTimesApp {
 
     async detectLocation() {
         const locationDisplay = document.getElementById('current-location');
-        locationDisplay.textContent = 'Detecting location...';
-
-        // Show loading state on button
         const detectButton = document.getElementById('detect-location');
-        const originalText = detectButton.innerHTML;
-        detectButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting...';
-        detectButton.disabled = true;
+        const originalText = detectButton ? detectButton.innerHTML : '';
+
+        locationDisplay.textContent = 'Detecting location...';
+        if (detectButton) {
+            detectButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting...';
+            detectButton.disabled = true;
+        }
 
         try {
-            if (!navigator.geolocation) {
-                throw new Error('Geolocation is not supported by this browser');
+            // Browser GPS is the most accurate option, but it requires HTTPS
+            // and the visitor's permission. Do not treat a denied permission
+            // as a fatal error: continue with approximate IP-based location.
+            if (window.isSecureContext && navigator.geolocation) {
+                try {
+                    const position = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: false,
+                            timeout: 12000,
+                            maximumAge: 10 * 60 * 1000
+                        });
+                    });
+
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    this.currentLocation = { lat, lng, method: 'coordinates' };
+                    await this.reverseGeocode(lat, lng);
+                    await this.fetchPrayerTimes();
+                    return;
+                } catch (gpsError) {
+                    console.info('Precise location unavailable; trying approximate location.', gpsError);
+                }
             }
 
-            const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 300000
+            // IP geolocation works when GPS permission is denied or unavailable.
+            // It is approximate and may identify the ISP's city rather than the
+            // visitor's exact location.
+            try {
+                const response = await fetch('https://ipwho.is/', {
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store'
                 });
-            });
+                if (!response.ok) throw new Error('IP location service unavailable');
 
-            this.currentLocation = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                method: 'coordinates'
-            };
+                const data = await response.json();
+                if (data.success === false || !Number.isFinite(Number(data.latitude)) ||
+                    !Number.isFinite(Number(data.longitude))) {
+                    throw new Error(data.message || 'IP location was not available');
+                }
 
-            // Get location name from coordinates
-            await this.reverseGeocode(position.coords.latitude, position.coords.longitude);
-            await this.fetchPrayerTimes();
+                const lat = Number(data.latitude);
+                const lng = Number(data.longitude);
+                const city = data.city || data.region || 'Approximate location';
+                const country = data.country || '';
+                this.currentLocation = { lat, lng, city, country, method: 'coordinates' };
 
+                locationDisplay.textContent = country ? `${city}, ${country} (approx.)` : `${city} (approx.)`;
+                document.getElementById('city-input').value = city;
+                const countryInput = document.getElementById('country-input');
+                countryInput.value = country;
+                if (countryInput.value !== country) countryInput.value = '';
+                this.updateCitySuggestions(countryInput.value);
+                await this.fetchPrayerTimes();
+                return;
+            } catch (ipError) {
+                console.warn('Approximate IP location failed; using Cairo fallback.', ipError);
+            }
+
+            // Last-resort fallback keeps the app usable even if both location
+            // providers are blocked or the device is offline.
+            this.setDefaultLocation();
         } catch (error) {
             console.warn('Location detection failed:', error);
-
-            let errorMessage = 'Unable to detect your location. ';
-            if (error.code === 1) {
-                errorMessage += 'Please enable location permissions and try again.';
-            } else if (error.code === 2) {
-                errorMessage += 'Location information is unavailable.';
-            } else if (error.code === 3) {
-                errorMessage += 'Location request timed out.';
-            } else {
-                errorMessage += 'Using default location (Cairo, Egypt).';
-            }
-
-            this.showError(errorMessage);
-            // Fallback to default location
             this.setDefaultLocation();
         } finally {
-            // Reset button state
-            detectButton.innerHTML = originalText;
-            detectButton.disabled = false;
+            if (detectButton) {
+                detectButton.innerHTML = originalText;
+                detectButton.disabled = false;
+            }
         }
     }
 
