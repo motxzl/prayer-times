@@ -386,11 +386,16 @@ class PrayerTimesApp {
             const country = data.countryName || 'Unknown Country';
 
             document.getElementById('current-location').textContent = `${city}, ${country}`;
-            document.getElementById('city-input').value = city;
-            document.getElementById('country-input').value = country;
 
-            // Update city suggestions for the detected country
+            // Updating suggestions clears the city field, so populate the
+            // detected values afterwards.
             this.updateCitySuggestions(country);
+            document.getElementById('city-input').value = city;
+            const countryInput = document.getElementById('country-input');
+            if (![...countryInput.options].some(option => option.value === country)) {
+                countryInput.add(new Option(country, country));
+            }
+            countryInput.value = country;
 
         } catch (error) {
             console.warn('Reverse geocoding failed:', error);
@@ -407,11 +412,9 @@ class PrayerTimesApp {
             method: 'coordinates' // Use coordinates for better accuracy
         };
         document.getElementById('current-location').textContent = 'Cairo, Egypt';
+        this.updateCitySuggestions('Egypt');
         document.getElementById('city-input').value = 'Cairo';
         document.getElementById('country-input').value = 'Egypt';
-
-        // Update city suggestions for Egypt
-        this.updateCitySuggestions('Egypt');
 
         return await this.fetchPrayerTimes();
     }
@@ -429,6 +432,10 @@ class PrayerTimesApp {
             this.showError('Please enter a city name');
             return;
         }
+
+        // Keep the previous working location in case the requested city fails.
+        const previousLocation = this.currentLocation ? { ...this.currentLocation } : null;
+        const previousLabel = document.getElementById('current-location').textContent;
 
         // Show loading state
         const searchButton = document.getElementById('manual-location');
@@ -455,12 +462,15 @@ class PrayerTimesApp {
         } catch (error) {
             console.error('Location search failed:', error);
             this.showError('City not found. Please check the spelling and try again.');
-            // Reset to previous location if available
-            if (this.prayerTimes) {
-                // Keep current data, just show error
+            // Restore the previous location instead of leaving a mismatched
+            // city label with prayer times belonging to another place.
+            if (previousLocation && this.prayerTimes) {
+                this.currentLocation = previousLocation;
+                document.getElementById('current-location').textContent = previousLabel;
+                document.getElementById('city-input').value = previousLocation.city || '';
+                document.getElementById('country-input').value = previousLocation.country || '';
             } else {
-                // No previous data, fallback to default
-                this.setDefaultLocation();
+                await this.setDefaultLocation();
             }
         } finally {
             // Reset button state
