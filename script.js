@@ -321,85 +321,103 @@ class PrayerTimesApp {
     async detectLocation() {
         const locationDisplay = document.getElementById('current-location');
         const detectButton = document.getElementById('detect-location');
-        const originalText = detectButton ? detectButton.innerHTML : '';
+        if (!locationDisplay || !detectButton) return;
 
+        const originalText = detectButton.innerHTML;
         locationDisplay.textContent = 'Detecting location...';
-        if (detectButton) {
-            detectButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting...';
-            detectButton.disabled = true;
-        }
+        detectButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting...';
+        detectButton.disabled = true;
 
         try {
-            // Browser GPS is the most accurate option, but it requires HTTPS
-            // and the visitor's permission. Do not treat a denied permission
-            // as a fatal error: continue with approximate IP-based location.
-            if (window.isSecureContext && navigator.geolocation) {
-                try {
-                    const position = await new Promise((resolve, reject) => {
-                        navigator.geolocation.getCurrentPosition(resolve, reject, {
-                            enableHighAccuracy: false,
-                            timeout: 12000,
-                            maximumAge: 10 * 60 * 1000
-                        });
-                    });
-
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    this.currentLocation = { lat, lng, method: 'coordinates' };
-                    await this.reverseGeocode(lat, lng);
-                    await this.fetchPrayerTimes();
-                    return;
-                } catch (gpsError) {
-                    console.info('Precise location unavailable; trying approximate location.', gpsError);
-                }
+            if (!window.isSecureContext) {
+                throw new Error('Location access requires a secure HTTPS connection.');
+            }
+            if (!navigator.geolocation) {
+                throw new Error('Geolocation is not supported by this browser.');
             }
 
-            // IP geolocation works when GPS permission is denied or unavailable.
-            // It is approximate and may identify the ISP's city rather than the
-            // visitor's exact location.
-            try {
-                const response = await fetch('https://ipwho.is/', {
-                    headers: { 'Accept': 'application/json' },
-                    cache: 'no-store'
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: false,
+                    timeout: 15000,
+                    maximumAge: 600000
                 });
-                if (!response.ok) throw new Error('IP location service unavailable');
+            });
 
-                const data = await response.json();
-                if (data.success === false || !Number.isFinite(Number(data.latitude)) ||
-                    !Number.isFinite(Number(data.longitude))) {
-                    throw new Error(data.message || 'IP location was not available');
-                }
-
-                const lat = Number(data.latitude);
-                const lng = Number(data.longitude);
-                const city = data.city || data.region || 'Approximate location';
-                const country = data.country || '';
-                this.currentLocation = { lat, lng, city, country, method: 'coordinates' };
-
-                locationDisplay.textContent = country ? `${city}, ${country} (approx.)` : `${city} (approx.)`;
-                document.getElementById('city-input').value = city;
-                const countryInput = document.getElementById('country-input');
-                countryInput.value = country;
-                if (countryInput.value !== country) countryInput.value = '';
-                this.updateCitySuggestions(countryInput.value);
-                await this.fetchPrayerTimes();
-                return;
-            } catch (ipError) {
-                console.warn('Approximate IP location failed; using Cairo fallback.', ipError);
+            const { latitude, longitude } = position.coords;
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                throw new Error('The device returned invalid coordinates.');
             }
 
-            // Last-resort fallback keeps the app usable even if both location
-            // providers are blocked or the device is offline.
-            this.setDefaultLocation();
+            this.currentLocation = {
+                lat: latitude,
+                lng: longitude,
+                method: 'coordinates'
+            };
+
+            await this.reverseGeocode(latitude, longitude);
+            await this.fetchPrayerTimes();
         } catch (error) {
-            console.warn('Location detection failed:', error);
-            this.setDefaultLocation();
-        } finally {
-            if (detectButton) {
-                detectButton.innerHTML = originalText;
-                detectButton.disabled = false;
+            console.warn('Device location detection failed:', error);
+
+            // If device permission is unavailable, try approximate IP-based
+            // location before falling back to the saved default city.
+            try {
+                const approximateLocation = await this.detectLocationByIP();
+                if (approximateLocation) {
+                    this.currentLocation = {
+                        lat: approximateLocation.latitude,
+                        lng: approximateLocation.longitude,
+                        method: 'coordinates'
+                    };
+                    locationDisplay.textContent = approximateLocation.city
+                        ? `${approximateLocation.city}, ${approximateLocation.country}`
+                        : approximateLocation.country;
+                    document.getElementById('city-input').value = approximateLocation.city || '';
+                    document.getElementById('country-input').value = approximateLocation.country || '';
+                    await this.fetchPrayerTimes();
+                    this.showError('Using approximate location from your internet connection. Enable device location for more accurate results.');
+                    return;
+                }
+            } catch (ipError) {
+                console.warn('Approximate IP location failed:', ipError);
             }
+
+            this.setDefaultLocation();
+            const message = error.code === 1
+                ? 'Location permission was denied. Showing Cairo, Egypt. You can choose a city manually.'
+                : error.code === 3
+                    ? 'Location request timed out. Showing Cairo, Egypt; you can choose a city manually.'
+                    : 'Automatic location is unavailable. Showing Cairo, Egypt; you can choose a city manually.';
+            this.showError(message);
+        } finally {
+            detectButton.innerHTML = originalText;
+            detectButton.disabled = false;
         }
+    }
+
+    async detectLocationByIP() {
+        const response = await fetch('https://ipapi.co/json/', {
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store'
+        });
+        if (!response.ok) throw new Error('IP location service is unavailable.');
+
+        const data = await response.json();
+        const latitude = Number(data.latitude);
+        const longitude = Number(data.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+            Math.abs(latitude) > 90 || Math.abs(longitude) > 180 ||
+            data.error) {
+            throw new Error('IP location response did not contain valid coordinates.');
+        }
+
+        return {
+            latitude,
+            longitude,
+            city: data.city || '',
+            country: data.country_name || ''
+        };
     }
 
     async reverseGeocode(lat, lng) {
