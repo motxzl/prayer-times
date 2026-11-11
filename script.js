@@ -129,7 +129,7 @@ class PrayerTimesApp {
         this.updateCitySuggestions(''); // Initialize with popular cities
         this.hideLoading();
         // Load a reliable default first, then request GPS to avoid competing startup requests.
-        this.setDefaultLocation().finally(() => this.detectLocation());
+        this.setDefaultLocation().catch(() => {}).finally(() => this.detectLocation());
     }
 
     bindEvents() {
@@ -166,13 +166,13 @@ class PrayerTimesApp {
         document.getElementById('calculation-method').addEventListener('change', (e) => {
             this.settings.calculationMethod = e.target.value;
             this.saveSettings();
-            this.fetchPrayerTimes();
+            this.fetchPrayerTimes().catch(() => {});
         });
 
         document.getElementById('asr-method').addEventListener('change', (e) => {
             this.settings.asrMethod = e.target.value;
             this.saveSettings();
-            this.fetchPrayerTimes();
+            this.fetchPrayerTimes().catch(() => {});
         });
 
         document.getElementById('theme-toggle').addEventListener('click', () => {
