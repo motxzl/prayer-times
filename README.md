@@ -4,26 +4,25 @@ A beautiful, modern Islamic prayer times web application with automatic location
 
 ## ✨ Features
 
-- **Automatic Location Detection**: Uses browser Geolocation API with fallback to manual city selection
+- **Automatic Location Detection**: Uses the browser Geolocation API; manual city/country selection remains available when permission is denied or GPS is unavailable
 - **Accurate Prayer Times**: Powered by the official Aladhan API
-- **Multiple Calculation Methods**: Support for various Islamic calculation methods
+- **Multiple Calculation Methods**: Egyptian General Authority, Muslim World League, ISNA, Karachi, Umm Al-Qura, Tehran, and Gulf
+- **Asr Juristic Method**: Standard and Hanafi
 - **Real-time Countdown**: Live countdown timer to the next prayer
 - **Responsive Design**: Works perfectly on mobile, tablet, and desktop
 - **Dark/Light Theme**: Toggle between themes with persistent settings
 - **PWA Ready**: Installable as a progressive web app
 - **Multiple Languages**: English and Arabic support
 - **Time Formats**: 12-hour and 24-hour format options
-- **Offline Support**: Service worker for offline functionality
+- **Offline Support**: Scope-aware service worker with cached app-shell fallback
 
 ## 🚀 Quick Start
 
 1. **Open the project**: Navigate to the project folder in VS Code
-2. **Start a local server**: Use Live Server extension or any local server
-3. **Open `index.html`**: The app will load immediately
+2. **Start a local HTTPS-capable development server** (for example, VS Code Live Server or `python -m http.server` for non-geolocation testing).
+3. Open the served application URL.
 
-### Alternative: Open Directly
-- Simply open `index.html` in any modern web browser
-- For best experience, use a local server to avoid CORS issues
+**Important:** Browser geolocation and service workers require a secure context: HTTPS in production, or localhost during development. Opening `index.html` using a `file://` URL does not support the complete experience.
 
 ## 🛠️ Tech Stack
 
@@ -136,3 +135,12 @@ Made with ❤️ for the Ummah. Free to use and modify.
 ---
 
 **Note**: This is a client-side only application. No server or database required. All data is fetched from public APIs and stored locally in the browser.
+
+## Reliability notes
+
+- Device location requires HTTPS (or localhost) and an explicit browser permission grant.
+- IP-based geolocation is intentionally not used as a fallback because it can be inaccurate.
+- Prayer times are provided by Aladhan. The selected calculation method and Asr school are sent with each request.
+- The displayed clock and countdown use the timezone returned by Aladhan for the selected location.
+- The repository is a static vanilla HTML/CSS/JavaScript app; it has no package manager, bundler, or production build command. Validate JavaScript with `node --check script.js` and `node --check sw.js`.
+- Browser notification scheduling is not currently implemented in this repository; the app should not be considered to provide background prayer alerts.

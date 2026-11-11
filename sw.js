@@ -1,89 +1,52 @@
-// Service Worker for PrayerTimes PWA
-const CACHE_NAME = 'prayertimes-v1.0.0';
-const urlsToCache = [
-    '/',
-    '/index.html',
-    '/style.css',
-    '/script.js',
-    '/manifest.json'
-];
+// PrayerTimes service worker — scope-safe, resilient asset caching.
+const CACHE_NAME = 'prayertimes-v2';
+const APP_ROOT = new URL('./', self.registration.scope);
+const CORE_ASSETS = ['index.html', 'style.css', 'script.js', 'manifest.json']
+    .map(path => new URL(path, APP_ROOT).href);
 
-// Install event - cache resources
 self.addEventListener('install', event => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => {
-                return cache.addAll(urlsToCache);
-            })
-    );
-    self.skipWaiting();
+    event.waitUntil((async () => {
+        const cache = await caches.open(CACHE_NAME);
+        await Promise.all(CORE_ASSETS.map(async url => {
+            try {
+                const response = await fetch(url, { cache: 'reload' });
+                if (response.ok) await cache.put(url, response);
+            } catch (error) {
+                console.warn('Precache skipped:', url, error);
+            }
+        }));
+        await self.skipWaiting();
+    })());
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', event => {
-    event.waitUntil(
-        caches.keys().then(cacheNames => {
-            return Promise.all(
-                cacheNames.map(cacheName => {
-                    if (cacheName !== CACHE_NAME) {
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        })
-    );
-    self.clients.claim();
+    event.waitUntil((async () => {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter(key => key.startsWith('prayertimes-') && key !== CACHE_NAME)
+            .map(key => caches.delete(key)));
+        await self.clients.claim();
+    })());
 });
 
-// Fetch event - serve from cache when offline
 self.addEventListener('fetch', event => {
-    // Only cache GET requests
-    if (event.request.method !== 'GET') return;
-
-    // Skip cross-origin requests
-    if (!event.request.url.startsWith(self.location.origin)) return;
-
-    event.respondWith(
-        caches.match(event.request)
-            .then(response => {
-                // Return cached version or fetch from network
-                return response || fetch(event.request)
-                    .then(response => {
-                        // Don't cache if not a valid response
-                        if (!response || response.status !== 200 || response.type !== 'basic') {
-                            return response;
-                        }
-
-                        // Clone the response
-                        const responseToCache = response.clone();
-
-                        // Cache the fetched response
-                        caches.open(CACHE_NAME)
-                            .then(cache => {
-                                cache.put(event.request, responseToCache);
-                            });
-
-                        return response;
-                    })
-                    .catch(() => {
-                        // Return offline fallback for HTML requests
-                        if (event.request.headers.get('accept').includes('text/html')) {
-                            return caches.match('/index.html');
-                        }
+    const request = event.request;
+    if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+    event.respondWith((async () => {
+        const cache = await caches.open(CACHE_NAME);
+        try {
+            const response = await fetch(request);
+            if (response.ok && response.type === 'basic') await cache.put(request, response.clone());
+            return response;
+        } catch (error) {
+            const cached = await cache.match(request);
+            if (cached) return cached;
+            if (request.mode === 'navigate') {
+                return (await cache.match(new URL('index.html', APP_ROOT).href)) ||
+                    new Response('You are offline. Reconnect and reload PrayerTimes.', {
+                        status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
                     });
-            })
-    );
+            }
+            throw error;
+        }
+    })());
 });
-
-// Background sync for prayer times updates (if supported)
-self.addEventListener('sync', event => {
-    if (event.tag === 'prayer-times-update') {
-        event.waitUntil(updatePrayerTimes());
-    }
-});
-
-async function updatePrayerTimes() {
-    // This would update prayer times in the background
-    // For now, just log that sync occurred
-    console.log('Background sync: updating prayer times');
-}

@@ -9,12 +9,15 @@ class PrayerTimesApp {
         this.nextPrayer = null;
         this.countdownInterval = null;
         this.currentTimeInterval = null;
+        this.timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        this.requestSequence = 0;
         this.deferredPrompt = null; // For PWA install
         this.settings = {
-            timeFormat: localStorage.getItem('timeFormat') || '12',
-            calculationMethod: localStorage.getItem('calculationMethod') || '5',
-            theme: localStorage.getItem('theme') || 'light',
-            language: localStorage.getItem('language') || 'en'
+            timeFormat: this.readSetting('timeFormat', '12'),
+            calculationMethod: this.readSetting('calculationMethod', '5'),
+            asrMethod: this.readSetting('asrMethod', '0'),
+            theme: this.readSetting('theme', 'light'),
+            language: this.readSetting('language', 'en')
         };
 
         // Country to cities mapping
@@ -124,10 +127,9 @@ class PrayerTimesApp {
         this.loadSettings();
         this.startCurrentTime();
         this.updateCitySuggestions(''); // Initialize with popular cities
-        this.setDefaultLocation(); // Set default location immediately
         this.hideLoading();
-        // Try to detect location in background
-        this.detectLocation();
+        // Load a reliable default first, then request GPS to avoid competing startup requests.
+        this.setDefaultLocation().catch(() => {}).finally(() => this.detectLocation());
     }
 
     bindEvents() {
@@ -164,7 +166,13 @@ class PrayerTimesApp {
         document.getElementById('calculation-method').addEventListener('change', (e) => {
             this.settings.calculationMethod = e.target.value;
             this.saveSettings();
-            this.fetchPrayerTimes();
+            this.fetchPrayerTimes().catch(() => {});
+        });
+
+        document.getElementById('asr-method').addEventListener('change', (e) => {
+            this.settings.asrMethod = e.target.value;
+            this.saveSettings();
+            this.fetchPrayerTimes().catch(() => {});
         });
 
         document.getElementById('theme-toggle').addEventListener('click', () => {
@@ -283,10 +291,21 @@ class PrayerTimesApp {
         }, 1000);
     }
 
+    readSetting(key, fallback) {
+        try {
+            const value = window.localStorage.getItem(key);
+            return value === null ? fallback : value;
+        } catch (error) {
+            console.warn('Local storage is unavailable:', error);
+            return fallback;
+        }
+    }
+
     loadSettings() {
         // Apply saved settings
         document.getElementById('time-format').value = this.settings.timeFormat;
         document.getElementById('calculation-method').value = this.settings.calculationMethod;
+        document.getElementById('asr-method').value = this.settings.asrMethod;
 
         // Apply theme
         if (this.settings.theme === 'dark') {
@@ -299,10 +318,15 @@ class PrayerTimesApp {
     }
 
     saveSettings() {
-        localStorage.setItem('timeFormat', this.settings.timeFormat);
-        localStorage.setItem('calculationMethod', this.settings.calculationMethod);
-        localStorage.setItem('theme', this.settings.theme);
-        localStorage.setItem('language', this.settings.language);
+        try {
+            localStorage.setItem('timeFormat', this.settings.timeFormat);
+            localStorage.setItem('calculationMethod', this.settings.calculationMethod);
+            localStorage.setItem('asrMethod', this.settings.asrMethod);
+            localStorage.setItem('theme', this.settings.theme);
+            localStorage.setItem('language', this.settings.language);
+        } catch (error) {
+            console.warn('Could not persist settings:', error);
+        }
     }
 
     toggleTheme() {
@@ -322,102 +346,47 @@ class PrayerTimesApp {
         const locationDisplay = document.getElementById('current-location');
         const detectButton = document.getElementById('detect-location');
         if (!locationDisplay || !detectButton) return;
-
         const originalText = detectButton.innerHTML;
-        locationDisplay.textContent = 'Detecting location...';
-        detectButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting...';
+        const previousLocation = this.currentLocation ? { ...this.currentLocation } : null;
+        locationDisplay.textContent = 'Detecting device location…';
+        detectButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting…';
         detectButton.disabled = true;
-
         try {
-            if (!window.isSecureContext) {
-                throw new Error('Location access requires a secure HTTPS connection.');
-            }
-            if (!navigator.geolocation) {
-                throw new Error('Geolocation is not supported by this browser.');
-            }
-
+            if (!window.isSecureContext) throw new Error('Device location requires HTTPS (or localhost).');
+            if (!navigator.geolocation) throw new Error('This browser does not support device location.');
             const position = await new Promise((resolve, reject) => {
                 navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: false,
-                    timeout: 15000,
-                    maximumAge: 600000
+                    enableHighAccuracy: true, timeout: 20000, maximumAge: 120000
                 });
             });
-
             const { latitude, longitude } = position.coords;
-            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+                Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
                 throw new Error('The device returned invalid coordinates.');
             }
-
-            this.currentLocation = {
-                lat: latitude,
-                lng: longitude,
-                method: 'coordinates'
-            };
-
+            this.currentLocation = { lat: latitude, lng: longitude, method: 'coordinates' };
             await this.reverseGeocode(latitude, longitude);
             await this.fetchPrayerTimes();
+            locationDisplay.textContent = this.currentLocation.label || locationDisplay.textContent;
         } catch (error) {
             console.warn('Device location detection failed:', error);
-
-            // If device permission is unavailable, try approximate IP-based
-            // location before falling back to the saved default city.
-            try {
-                const approximateLocation = await this.detectLocationByIP();
-                if (approximateLocation) {
-                    this.currentLocation = {
-                        lat: approximateLocation.latitude,
-                        lng: approximateLocation.longitude,
-                        method: 'coordinates'
-                    };
-                    locationDisplay.textContent = approximateLocation.city
-                        ? `${approximateLocation.city}, ${approximateLocation.country}`
-                        : approximateLocation.country;
-                    document.getElementById('city-input').value = approximateLocation.city || '';
-                    document.getElementById('country-input').value = approximateLocation.country || '';
-                    await this.fetchPrayerTimes();
-                    this.showError('Using approximate location from your internet connection. Enable device location for more accurate results.');
-                    return;
-                }
-            } catch (ipError) {
-                console.warn('Approximate IP location failed:', ipError);
-            }
-
-            this.setDefaultLocation();
+            this.currentLocation = previousLocation || this.currentLocation;
             const message = error.code === 1
-                ? 'Location permission was denied. Showing Cairo, Egypt. You can choose a city manually.'
-                : error.code === 3
-                    ? 'Location request timed out. Showing Cairo, Egypt; you can choose a city manually.'
-                    : 'Automatic location is unavailable. Showing Cairo, Egypt; you can choose a city manually.';
+                ? 'Location permission was denied. Allow location access in browser settings, or choose a city manually.'
+                : error.code === 2
+                    ? 'Your device could not determine its location. Check location services or choose a city manually.'
+                    : error.code === 3
+                        ? 'Location request timed out. Try again or choose a city manually.'
+                        : (error.message || 'Automatic location is unavailable. Choose a city manually.');
             this.showError(message);
+            if (previousLocation) {
+                locationDisplay.textContent = previousLocation.label ||
+                    [previousLocation.city, previousLocation.country].filter(Boolean).join(', ') || 'Previous location';
+            }
         } finally {
             detectButton.innerHTML = originalText;
             detectButton.disabled = false;
         }
-    }
-
-    async detectLocationByIP() {
-        const response = await fetch('https://ipapi.co/json/', {
-            headers: { 'Accept': 'application/json' },
-            cache: 'no-store'
-        });
-        if (!response.ok) throw new Error('IP location service is unavailable.');
-
-        const data = await response.json();
-        const latitude = Number(data.latitude);
-        const longitude = Number(data.longitude);
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
-            Math.abs(latitude) > 90 || Math.abs(longitude) > 180 ||
-            data.error) {
-            throw new Error('IP location response did not contain valid coordinates.');
-        }
-
-        return {
-            latitude,
-            longitude,
-            city: data.city || '',
-            country: data.country_name || ''
-        };
     }
 
     async reverseGeocode(lat, lng) {
@@ -428,12 +397,12 @@ class PrayerTimesApp {
             const city = data.city || data.locality || 'Unknown City';
             const country = data.countryName || 'Unknown Country';
 
-            document.getElementById('current-location').textContent = `${city}, ${country}`;
-            document.getElementById('city-input').value = city;
+            const label = [city, country].filter(Boolean).join(', ');
+            this.currentLocation.label = label;
+            document.getElementById('current-location').textContent = label;
             document.getElementById('country-input').value = country;
-
-            // Update city suggestions for the detected country
             this.updateCitySuggestions(country);
+            document.getElementById('city-input').value = city;
 
         } catch (error) {
             console.warn('Reverse geocoding failed:', error);
@@ -456,7 +425,7 @@ class PrayerTimesApp {
         // Update city suggestions for Egypt
         this.updateCitySuggestions('Egypt');
 
-        this.fetchPrayerTimes();
+        return this.fetchPrayerTimes();
     }
 
     async searchByCity() {
@@ -479,16 +448,11 @@ class PrayerTimesApp {
         searchButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Searching...';
         searchButton.disabled = true;
 
+        const previousLocation = this.currentLocation ? { ...this.currentLocation } : null;
         try {
-            this.currentLocation = {
-                city: city,
-                country: country || '', // Country is optional
-                method: 'city'
-            };
-
-            document.getElementById('current-location').textContent = `${city}${country ? ', ' + country : ''}`;
-
+            this.currentLocation = { city, country, label: `${city}, ${country}`, method: 'city' };
             await this.fetchPrayerTimes();
+            document.getElementById('current-location').textContent = this.currentLocation.label;
 
             // Success - hide location settings and show success message
             document.getElementById('location-settings').classList.add('hidden');
@@ -498,12 +462,8 @@ class PrayerTimesApp {
             console.error('Location search failed:', error);
             this.showError('City not found. Please check the spelling and try again.');
             // Reset to previous location if available
-            if (this.prayerTimes) {
-                // Keep current data, just show error
-            } else {
-                // No previous data, fallback to default
-                this.setDefaultLocation();
-            }
+            this.currentLocation = previousLocation;
+            if (!previousLocation && !this.prayerTimes) await this.setDefaultLocation();
         } finally {
             // Reset button state
             searchButton.innerHTML = originalText;
@@ -513,42 +473,53 @@ class PrayerTimesApp {
 
     async fetchPrayerTimes() {
         if (!this.currentLocation) return;
-
+        const requestId = ++this.requestSequence;
+        const locationSnapshot = { ...this.currentLocation };
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         try {
+            const params = new URLSearchParams({
+                method: this.settings.calculationMethod,
+                school: this.settings.asrMethod
+            });
             let url;
-            if (this.currentLocation.method === 'coordinates') {
-                url = `${this.apiBase}/timings/${Date.now() / 1000}?latitude=${this.currentLocation.lat}&longitude=${this.currentLocation.lng}&method=${this.settings.calculationMethod}`;
+            if (locationSnapshot.method === 'coordinates') {
+                const now = new Date();
+                const datePath = [String(now.getDate()).padStart(2, '0'),
+                    String(now.getMonth() + 1).padStart(2, '0'), now.getFullYear()].join('-');
+                params.set('latitude', locationSnapshot.lat);
+                params.set('longitude', locationSnapshot.lng);
+                url = `${this.apiBase}/timings/${datePath}?${params.toString()}`;
             } else {
-                url = `${this.apiBase}/timingsByCity?city=${encodeURIComponent(this.currentLocation.city)}&country=${encodeURIComponent(this.currentLocation.country || '')}&method=${this.settings.calculationMethod}`;
+                params.set('city', locationSnapshot.city);
+                params.set('country', locationSnapshot.country);
+                url = `${this.apiBase}/timingsByCity?${params.toString()}`;
             }
-
-            const response = await fetch(url);
+            const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+            if (!response.ok) throw new Error(`Prayer service returned HTTP ${response.status}.`);
             const data = await response.json();
-
-            if (data.code === 200) {
-                this.prayerTimes = data.data.timings;
-                this.updateDates(data.data.date);
-                this.updatePrayerTimesDisplay();
-                this.calculateNextPrayer();
-                this.startCountdown();
-            } else {
-                throw new Error(data.status || 'Location not found. Please check the city/country name.');
+            if (requestId !== this.requestSequence) return;
+            if (data.code !== 200 || !data.data?.timings) {
+                throw new Error(data.status || 'Prayer times could not be found for this location.');
             }
-
+            this.prayerTimes = data.data.timings;
+            this.timeZone = data.data.meta?.timezone || this.timeZone;
+            this.updateDates(data.data.date);
+            this.updatePrayerTimesDisplay();
+            this.calculateNextPrayer();
+            this.startCountdown();
         } catch (error) {
+            if (requestId !== this.requestSequence) return;
             console.error('Failed to fetch prayer times:', error);
-
-            let errorMessage = 'Failed to load prayer times. ';
-            if (error.message.includes('Location not found') || error.message.includes('not found')) {
-                errorMessage += 'Please check the city/country name and try again.';
-            } else if (error.message.includes('fetch')) {
-                errorMessage += 'Please check your internet connection.';
-            } else {
-                errorMessage += 'Please try again later.';
-            }
-
-            this.showError(errorMessage);
-            throw error; // Re-throw so searchByCity can handle it
+            const message = error.name === 'AbortError'
+                ? 'The prayer-time request timed out. Please try again.'
+                : /fetch|network/i.test(error.message)
+                    ? 'Could not reach the prayer-time service. Check your internet connection.'
+                    : error.message || 'Failed to load prayer times. Please try again.';
+            this.showError(message);
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
@@ -608,11 +579,19 @@ class PrayerTimesApp {
         }
     }
 
+    getLocationClockParts(date = new Date()) {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: this.timeZone, hour: '2-digit', minute: '2-digit',
+            second: '2-digit', hourCycle: 'h23'
+        }).formatToParts(date);
+        return Object.fromEntries(parts.map(part => [part.type, Number(part.value)]));
+    }
+
     calculateNextPrayer() {
         if (!this.prayerTimes) return;
-
         const now = new Date();
-        const currentTime = now.getHours() * 60 + now.getMinutes();
+        const clock = this.getLocationClockParts(now);
+        const currentTime = clock.hour * 60 + clock.minute;
 
         const prayers = [
             { name: 'Fajr', time: this.prayerTimes.Fajr },
@@ -646,7 +625,8 @@ class PrayerTimesApp {
             this.nextPrayer = {
                 name: nextPrayer.name,
                 time: nextPrayer.time,
-                minutesUntil: minDiff
+                minutesUntil: minDiff,
+                at: now.getTime() + minDiff * 60000 - clock.second * 1000
             };
             this.updateNextPrayerDisplay();
         } else {
@@ -668,43 +648,17 @@ class PrayerTimesApp {
     }
 
     startCountdown() {
-        if (this.countdownInterval) {
-            clearInterval(this.countdownInterval);
-        }
-
+        if (this.countdownInterval) clearInterval(this.countdownInterval);
         this.countdownInterval = setInterval(() => {
             if (!this.nextPrayer) return;
-
-            const now = new Date();
-            const currentTime = now.getHours() * 60 + now.getMinutes();
-            const [prayerHours, prayerMinutes] = this.nextPrayer.time.split(':').map(Number);
-            const prayerTime = prayerHours * 60 + prayerMinutes;
-
-            let minutesUntil = prayerTime - currentTime;
-            if (minutesUntil < 0) {
-                minutesUntil += 24 * 60; // Add 24 hours if prayer has passed
-            }
-
-            // Calculate exact time difference including seconds
-            const prayerDate = new Date();
-            prayerDate.setHours(prayerHours, prayerMinutes, 0, 0);
-
-            if (prayerDate < now) {
-                prayerDate.setDate(prayerDate.getDate() + 1);
-            }
-
-            const timeDiff = prayerDate - now;
-            const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-            const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
-
-            const countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            document.getElementById('countdown').textContent = countdownText;
-
-            // If countdown reaches zero, recalculate next prayer
-            if (timeDiff <= 0) {
-                this.calculateNextPrayer();
-            }
+            const remaining = Math.max(0, this.nextPrayer.at - Date.now());
+            const hours = Math.floor(remaining / 3600000);
+            const minutes = Math.floor((remaining % 3600000) / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            const countdown = document.getElementById('countdown');
+            if (countdown) countdown.textContent =
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            if (remaining <= 0) this.calculateNextPrayer();
         }, 1000);
     }
 
@@ -717,18 +671,10 @@ class PrayerTimesApp {
 
     updateCurrentTime() {
         const now = new Date();
-        let timeString;
-
-        if (this.settings.timeFormat === '12') {
-            timeString = now.toLocaleTimeString('en-US', {
-                hour12: true,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-        } else {
-            timeString = now.toTimeString().split(' ')[0]; // HH:MM:SS format
-        }
+        const timeString = new Intl.DateTimeFormat(this.settings.language === 'ar' ? 'ar-EG' : 'en-GB', {
+            timeZone: this.timeZone, hour: '2-digit', minute: '2-digit',
+            second: '2-digit', hour12: this.settings.timeFormat === '12'
+        }).format(now);
 
         document.getElementById('current-time').textContent = timeString;
     }
@@ -743,15 +689,7 @@ class PrayerTimesApp {
             document.body.appendChild(errorDiv);
         }
 
-        errorDiv.innerHTML = `
-            <div class="flex items-center">
-                <i class="fas fa-exclamation-triangle mr-2"></i>
-                <span>${message}</span>
-                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-red-200 hover:text-white">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        `;
+        errorDiv.textContent = message;
 
         // Auto-hide after 5 seconds
         setTimeout(() => {
