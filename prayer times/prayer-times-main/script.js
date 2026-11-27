@@ -137,6 +137,8 @@ class IslamTimes {
         // Default: Cairo — loads prayer times immediately without waiting for GPS
         this._setLocation({ lat: 30.0444, lng: 31.2357, city: 'Cairo', country: 'Egypt' });
 
+        window.addEventListener('online', () => this._fetchTimes());
+
         // Then attempt GPS in background
         this._detectGPS();
     }
@@ -213,33 +215,58 @@ class IslamTimes {
     // ─────────────────────────────────────────────
     async _fetchTimes() {
         if (!this.loc) return;
-        try {
-            const base = 'https://api.aladhan.com/v1';
-            const ts = Math.floor(Date.now() / 1000);
-            let url;
-
-            if (this.loc.lat !== undefined) {
-                url = `${base}/timings/${ts}?latitude=${this.loc.lat}&longitude=${this.loc.lng}&method=${this.s.method}`;
-            } else {
-                url = `${base}/timingsByCity?city=${encodeURIComponent(this.loc.city)}&country=${encodeURIComponent(this.loc.country)}&method=${this.s.method}`;
-            }
-
-            const r = await fetch(url);
-            const d = await r.json();
-
-            if (d.code === 200) {
+        clearTimeout(this._retryTimer);
+        const base = 'https://api.aladhan.com/v1';
+        const ts = Math.floor(Date.now() / 1000);
+        const url = this.loc.lat !== undefined
+            ? `${base}/timings/${ts}?latitude=${this.loc.lat}&longitude=${this.loc.lng}&method=${this.s.method}`
+            : `${base}/timingsByCity?city=${encodeURIComponent(this.loc.city)}&country=${encodeURIComponent(this.loc.country)}&method=${this.s.method}`;
+        const cacheKey = 'it_last_times';
+        let lastErr = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 10000);
+            try {
+                const r = await fetch(url, { signal: ctrl.signal });
+                const d = await r.json();
+                if (d.code !== 200 || !d.data || !d.data.timings) throw new Error(d.status || 'API error');
                 this.times = d.data.timings;
+                try {
+                    localStorage.setItem(cacheKey, JSON.stringify({
+                        times: d.data.timings, date: d.data.date, method: this.s.method,
+                        city: this.loc.city, country: this.loc.country, savedAt: Date.now()
+                    }));
+                } catch (_) {}
                 this._updateDates(d.data.date);
                 this._renderTimes();
                 this._calcNext();
                 this._startCountdown();
                 if (this.s.notifs) this._scheduleNotifications();
-            } else {
-                throw new Error(d.status || 'API error');
+                return;
+            } catch (e) {
+                lastErr = e;
+                if (attempt < 2) await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
+            } finally {
+                clearTimeout(timer);
             }
-        } catch (e) {
-            this._showErr('Failed to load prayer times. Check your connection and try again.');
         }
+        // All attempts failed: show last good times if we have them, then keep retrying.
+        let shown = false;
+        try {
+            const c = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+            if (c && c.times && c.method === this.s.method) {
+                this.times = c.times;
+                this._updateDates(c.date);
+                this._renderTimes();
+                this._calcNext();
+                this._startCountdown();
+                shown = true;
+            }
+        } catch (_) {}
+        this._showErr(shown
+            ? 'No connection. Showing your last saved prayer times. Retrying...'
+            : 'Failed to load prayer times. Check your connection. Retrying...');
+        this._retryTimer = setTimeout(() => this._fetchTimes(), 30000);
     }
 
     // ─────────────────────────────────────────────
@@ -1239,3 +1266,4 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => loading?.remove(), 500);
     }, 260);
 });
+
