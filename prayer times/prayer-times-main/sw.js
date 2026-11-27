@@ -1,69 +1,51 @@
 /**
- * Islam Times — Service Worker
- * Caches core assets for offline use (cache-first strategy for app shell,
- * network-first for API calls so prayer times always stay fresh).
+ * Islam Times - Service Worker
+ * Network-first for the app shell so a new deploy is never pinned behind an old cache.
+ * The cache is only an offline fallback. API calls are never cached here.
  */
+const CACHE = 'islamtimes-v5';
+const SHELL = ['./', './index.html', './style.css', './script.js', './manifest.json',
+    './icons/app-icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 
-const CACHE = 'islamtimes-v4';
-const SHELL = ['./', './index.html', './style.css', './script.js', './manifest.json', './icons/app-icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
-
-// ─── Install: pre-cache app shell ──────────────────────────────────────
 self.addEventListener('install', e => {
-    e.waitUntil(
-        caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
-    );
+    e.waitUntil((async () => {
+        const cache = await caches.open(CACHE);
+        // One missing file must not fail the whole install.
+        await Promise.all(SHELL.map(async u => {
+            try { const r = await fetch(u, { cache: 'reload' }); if (r.ok) await cache.put(u, r); } catch (_) {}
+        }));
+        await self.skipWaiting();
+    })());
 });
 
-// ─── Activate: remove old caches ───────────────────────────────────────
 self.addEventListener('activate', e => {
-    e.waitUntil(
-        caches.keys()
-            .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-            .then(() => self.clients.claim())
-    );
+    e.waitUntil((async () => {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+        await self.clients.claim();
+    })());
 });
 
-// ─── Fetch: network-first for API, cache-first for assets ─────────────
 self.addEventListener('fetch', e => {
-    if (e.request.method !== 'GET') return;
-
-    const url = new URL(e.request.url);
-
-    // API calls: always try network first, no caching
-    if (url.hostname.includes('aladhan.com') ||
-        url.hostname.includes('bigdatacloud.net') ||
-        url.hostname.includes('open-meteo.com')) {
-        e.respondWith(fetch(e.request).catch(() => new Response('', { status: 503 })));
-        return;
-    }
-
-    // CDN (fonts, icons): cache-first
-    if (url.hostname.includes('fonts.') || url.hostname.includes('cdnjs.') || url.hostname.includes('cdn.tailwind')) {
-        e.respondWith(
-            caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
-                const copy = res.clone();
-                caches.open(CACHE).then(c => c.put(e.request, copy));
-                return res;
-            }))
-        );
-        return;
-    }
-
-    // App shell: cache-first, fallback to index.html for navigation
-    e.respondWith(
-        caches.match(e.request).then(cached => {
-            if (cached) return cached;
-            return fetch(e.request).then(res => {
-                if (res.ok) {
-                    const copy = res.clone();
-                    caches.open(CACHE).then(c => c.put(e.request, copy));
-                }
-                return res;
-            }).catch(() => {
-                if (e.request.headers.get('accept')?.includes('text/html')) {
-                    return caches.match('./index.html');
-                }
-            });
-        })
-    );
+    const req = e.request;
+    if (req.method !== 'GET') return;
+    const url = new URL(req.url);
+    // Prayer/geocoding APIs: straight to the network.
+    if (/aladhan\.com|bigdatacloud\.net|open-meteo\.com/.test(url.hostname)) return;
+    e.respondWith((async () => {
+        const cache = await caches.open(CACHE);
+        try {
+            const res = await fetch(req);
+            if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()).catch(() => {});
+            return res;
+        } catch (err) {
+            const hit = await cache.match(req, { ignoreSearch: true });
+            if (hit) return hit;
+            if (req.mode === 'navigate') {
+                const idx = await cache.match('./index.html');
+                if (idx) return idx;
+            }
+            return Response.error();
+        }
+    })());
 });
