@@ -19,56 +19,11 @@
     <link rel="icon" type="image/svg+xml" href="icons/app-icon.svg">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
 
-    <!-- Google Fonts for Arabic -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Custom Tailwind Config -->
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        islamic: {
-                            green: '#059669',
-                            dark: '#0c0a09',
-                            light: '#f8fafc'
-                        }
-                    },
-                    fontFamily: {
-                        'arabic': ['Amiri', 'serif'],
-                        'sans': ['Inter', 'system-ui', 'sans-serif']
-                    },
-                    animation: {
-                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        'fade-in': 'fadeIn 0.6s ease-in-out',
-                        'slide-up': 'slideUp 0.5s ease-out'
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' }
-                        },
-                        slideUp: {
-                            '0%': { opacity: '0', transform: 'translateY(20px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' }
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-
-    <!-- Custom Styles -->
-    <link rel="stylesheet" href="style.css">
+    <!-- Custom Styles (all local, no external hosts) -->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="fonts.css" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="fonts.css"></noscript>
 </head>
 <body class="dark bg-gradient-to-br from-islamic-dark via-slate-900 to-islamic-dark min-h-screen pb-24 text-white font-sans transition-all duration-500">
     <!-- Loading Screen -->
